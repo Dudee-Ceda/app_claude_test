@@ -16,7 +16,17 @@
 - แผนภาพโมเมนต์, แปลนแผ่นพื้นพร้อมเหล็กเสริม
 - ดาวน์โหลดรายการคำนวณเป็น **PDF** (ฟอนต์ไทย Sarabun, OFL) หรือ Markdown
 
-## การใช้งาน
+## เว็บเวอร์ชันเบราว์เซอร์ (ไม่ต้องติดตั้ง)
+`web/index.html` เป็นเว็บไฟล์เดียว คำนวณด้วย JavaScript ในเบราว์เซอร์ ผลตรงกับ engine Python
+(ตรวจด้วย `tests/test_web_parity.py`) เปิดไฟล์ได้ทันที หรือ deploy เป็น GitHub Pages ได้
+ข้อต่างจากเวอร์ชัน Streamlit: ไม่มีปุ่มดาวน์โหลด PDF (ใช้ปุ่มคัดลอกรายการคำนวณแทน)
+
+## Deploy เวอร์ชัน Streamlit (Streamlit Community Cloud)
+1. เข้า https://share.streamlit.io แล้วล็อกอินด้วย GitHub
+2. Create app → เลือก repo `dudee-ceda/app_claude_test`, branch `claude/rc-slab-design-streamlit-o8fost`, main file `app.py`
+3. Deploy — จะได้ URL แบบ `https://<ชื่อแอป>.streamlit.app`
+
+## การใช้งาน (เครื่องตัวเอง)
 ```bash
 pip install -r requirements.txt
 streamlit run app.py

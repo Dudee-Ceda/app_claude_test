@@ -64,7 +64,7 @@ def required_rho(Mu_kgm: float, d: float, conc: Concrete, steel: Steel, code: De
 
 def select_spacing(As_req: float, bar: str, s_max: float) -> float:
     s = B * bar_area(bar) / As_req if As_req > 0 else s_max
-    s = math.floor(s / SPACING_STEP) * SPACING_STEP
+    s = math.floor(s / SPACING_STEP + 1e-9) * SPACING_STEP
     return max(SPACING_STEP, min(s, s_max))
 
 
