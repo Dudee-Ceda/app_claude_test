@@ -98,10 +98,10 @@ def markdown_to_pdf(md: str, landscape: bool = False, table_font: float = 9, col
         elif text.startswith("- "):
             pdf.set_font("Sarabun", "", 10.5)
             pdf.set_x(pdf.l_margin + 3)
-            pdf.multi_cell(0, 5.8, "•  " + text[2:], markdown=True)
+            pdf.multi_cell(0, 5.8, "•  " + text[2:], markdown=True, align="L")
         elif text.strip():
             pdf.set_font("Sarabun", "", 10.5)
-            pdf.multi_cell(0, 5.8, text, markdown=True)
+            pdf.multi_cell(0, 5.8, text, markdown=True, align="L")
         else:
             pdf.ln(2)
         i += 1

@@ -12,7 +12,10 @@ from rcslab.flexure import FlexureResult, rho_max
 from rcslab.materials import STEEL_GRADES
 from rcslab.one_way import OneWayInput, OneWayResult, design_one_way
 from rcslab.report_pdf import markdown_to_pdf
-from rcslab.schedule import COLUMNS, PDF_COL_WIDTHS, one_way_row, schedule_notes, two_way_row
+from rcslab.detailing import (
+    CANTILEVER_TYPES, ONE_WAY_TYPES, TWO_WAY_TYPES, TYPE_LABELS, detail_one_way, detail_two_way,
+)
+from rcslab.schedule import COLUMNS, PDF_COL_WIDTHS, schedule_notes, schedule_records
 from rcslab.two_way import CASE_NAMES, TwoWayInput, TwoWayResult, design_two_way
 
 st.set_page_config(page_title="RC Slab Design", page_icon="🏗️", layout="wide")
@@ -46,6 +49,9 @@ cover = st.sidebar.number_input("ระยะหุ้มคอนกรีต (
 
 st.sidebar.header("ปริมาณวัสดุ (BOQ)")
 waste = st.sidebar.number_input("เผื่อระยะทาบ/เศษเหล็ก (%)", 0.0, 30.0, 7.0, 1.0) / 100
+st.sidebar.header("รายละเอียดเหล็ก (Detailing)")
+support_w = st.sidebar.number_input("ความกว้างคาน/ที่รองรับ (mm)", 0.0, 1500.0, 300.0, 50.0,
+                                    help="ใช้หาช่วงสุทธิ Ln = ช่วง − ความกว้างที่รองรับ สำหรับ L1 = Ln/4, L2 = Ln/3") / 1000
 
 conc = Concrete(fc=fc, unit_weight=gamma_c)
 steel = Steel(fy=fy)
@@ -355,18 +361,22 @@ def next_mark() -> str:
     return f"S{n}"
 
 
-def _save_row(row, bars: list[str], key: str) -> None:
+def _save_row(entry, key: str) -> None:
     mark = st.session_state[f"{key}_mark"].strip()
     exists = mark in st.session_state.schedule
-    d = row(mark).as_dict()
-    d["_bars"] = bars
-    st.session_state.schedule[mark] = d
+    st.session_state.schedule[mark] = entry(mark)
     for k in ("ow", "tw"):  # both tabs move on to the next free mark
         st.session_state[f"{k}_mark"] = next_mark()
     st.toast(f"{'แทนที่' if exists else 'เพิ่ม'} {mark} ในตารางเหล็กพื้นแล้ว")
 
 
-def add_to_schedule(row, bars: list[str], key: str) -> None:
+def schedule_entry(detail, ok: bool):
+    """Schedule entry builder: mark -> {records, ok, bars, module}."""
+    return lambda mark: {"records": schedule_records(mark, detail), "ok": ok, "bars": [detail.bar],
+                         "module": detail.module}
+
+
+def add_to_schedule(entry, key: str) -> None:
     st.subheader("บันทึกลงตารางเหล็กพื้น")
     if f"{key}_mark" not in st.session_state:
         st.session_state[f"{key}_mark"] = next_mark()
@@ -375,16 +385,33 @@ def add_to_schedule(row, bars: list[str], key: str) -> None:
     c[1].write("")
     c[1].write("")
     c[1].button("➕ เพิ่ม/แทนที่ในตาราง", key=f"{key}_add", disabled=not mark, on_click=_save_row,
-                args=(row, bars, key))
+                args=(entry, key))
     c[2].caption("ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม · ดูตารางทั้งหมดในแท็บ ตารางเหล็กพื้น")
+    preview = entry(mark or "—")
+    st.dataframe(pd.DataFrame(schedule_table_rows([preview], merge=True)), hide_index=True, width="stretch")
+    st.caption(f"ระยะ Module ของแผ่นนี้ = {preview['module'] * 10:.0f} mm — ระยะห่างทุกตำแหน่งหาร {preview['module'] * 10:.0f} mm "
+               "ลงตัว เหล็กทุกชุดจึงตรงแนวกัน")
 
 
-def schedule_markdown(rows: list[dict]) -> str:
-    keys = list(COLUMNS)
+def schedule_table_rows(entries: list[dict], merge: bool) -> list[dict]:
+    """Flat rows; with merge, SLAB and SLAB TYPE show only on the CROSS row like the drawing."""
+    out = []
+    for e in entries:
+        for i, r in enumerate(e["records"]):
+            row = {COLUMNS[k]: r[k] for k in COLUMNS}
+            if merge and i:
+                row[COLUMNS["mark"]] = row[COLUMNS["slab_type"]] = ""
+            out.append(row)
+    return out
+
+
+def schedule_markdown(entries: list[dict]) -> str:
+    rows = schedule_table_rows(entries, merge=True)
+    head = list(COLUMNS.values())
     lines = ["# ตารางเหล็กพื้น (Slab Schedule)", "", f"- มาตรฐาน: {code_name}", "",
-             "| " + " | ".join(COLUMNS[k] for k in keys) + " |", "|" + "---|" * len(keys)]
-    lines += ["| " + " | ".join(str(r[k]) for k in keys) + " |" for r in rows]
-    bars = [b for r in rows for b in r["_bars"]]
+             "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    lines += ["| " + " | ".join(str(r[h]) for h in head) + " |" for r in rows]
+    bars = [b for e in entries for b in e["bars"]]
     lines += ["", "## หมายเหตุ", *[f"- {n}" for n in schedule_notes(fc, grade, cover, bars)]]
     return "\n".join(lines)
 
@@ -410,6 +437,10 @@ with tab1:
         main_bar = st.selectbox("ขนาดเหล็กเสริม", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="ow_bar")
         st.caption("ใช้ขนาดเดียวทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว")
     is_cant = ONE_WAY_SUPPORTS[support].name == "cantilever"
+    with c3:
+        types1 = CANTILEVER_TYPES if is_cant else ONE_WAY_TYPES
+        type1 = st.selectbox("SLAB TYPE (แบบมาตรฐาน)", types1, format_func=TYPE_LABELS.get,
+                             key="ow_type_cant" if is_cant else "ow_type")
     with c1:
         width1 = st.number_input("ความกว้างแผ่นพื้น (ตั้งฉากกับช่วง) สำหรับ BOQ (m)", 0.5, 30.0, 4.0, 0.1,
                                  key="ow_W")
@@ -425,7 +456,8 @@ with tab1:
     ow = design_one_way(
         OneWayInput(span, h1, support, sdl1, ll1, cover, main_bar, p_end, xi), conc, steel, code
     )
-    ow_boq = one_way_boq(ow, width1, waste)
+    ow_boq = one_way_boq(ow, width1, waste, type1, support_w)
+    ow_det = detail_one_way(ow, width1, type1, support_w)
     st.divider()
     overall_banner(ow.ok)
     load_block(ow.sw, sdl1, ll1, ow.wd, ow.wu)
@@ -457,7 +489,7 @@ with tab1:
         st.info(n)
     download_buttons(report_one_way(ow, ow_boq), "rc_slab_one_way")
     st.divider()
-    add_to_schedule(lambda m: one_way_row(m, ow, width1), [main_bar], "ow")
+    add_to_schedule(schedule_entry(ow_det, ow.ok), "ow")
 
 # ---------------- Two-way
 with tab2:
@@ -473,6 +505,7 @@ with tab2:
         ll2 = st.number_input("LL (kg/m²)", 0.0, 2000.0, 200.0, 10.0, key="tw_ll")
         bar2 = st.selectbox("ขนาดเหล็กเสริม", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="tw_bar")
         st.caption("ใช้ขนาดเดียวทั้งแผ่น")
+        type2 = st.selectbox("SLAB TYPE (แบบมาตรฐาน)", TWO_WAY_TYPES, format_func=TYPE_LABELS.get, key="tw_type")
     with c3:
         st.subheader("ความต่อเนื่องของขอบ")
         e1 = st.checkbox("ขอบ 1 (ซ้าย, ยาวตามแนว Y) ต่อเนื่อง", True)
@@ -482,7 +515,8 @@ with tab2:
 
     # long_edge_* are edges of length = second span (Y); short_edge_* are edges of length = first span (X)
     tw = design_two_way(TwoWayInput(sx, sy, h2, sdl2, ll2, e1, e2, e3, e4, cover, bar2), conc, steel, code)
-    tw_boq = two_way_boq(tw, waste)
+    tw_boq = two_way_boq(tw, waste, type2, support_w)
+    tw_det = detail_two_way(tw, type2, support_w)
     st.divider()
     if not tw.is_two_way:
         st.warning(f"m = S/L = {tw.m:.2f} < 0.5 → แผ่นพื้นทำงานแบบทางเดียว ให้ออกแบบในแท็บ One-way")
@@ -518,30 +552,34 @@ with tab2:
     boq_section(tw_boq)
     download_buttons(report_two_way(tw, tw_boq), "rc_slab_two_way")
     st.divider()
-    add_to_schedule(lambda m: two_way_row(m, tw), [bar2], "tw")
+    add_to_schedule(schedule_entry(tw_det, tw.ok), "tw")
 
 # ---------------- Slab schedule
 with tab4:
     st.subheader("ตารางเหล็กพื้น (Slab Schedule)")
-    rows = [st.session_state.schedule[k] for k in sorted(st.session_state.schedule, key=natural_key)]
+    entries = [st.session_state.schedule[k] for k in sorted(st.session_state.schedule, key=natural_key)]
+    rows = entries
     if not rows:
         st.info("ยังไม่มีรายการ ออกแบบพื้นในแท็บพื้นทางเดียวหรือพื้นสองทาง แล้วกด เพิ่ม/แทนที่ในตาราง")
     else:
-        df = pd.DataFrame([{COLUMNS[k]: r[k] for k in COLUMNS} | {"สถานะ": status(r["ok"])} for r in rows])
-        st.dataframe(df, hide_index=True, width="stretch")
-        if not all(r["ok"] for r in rows):
-            st.warning("มีพื้นที่ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ")
+        st.dataframe(pd.DataFrame(schedule_table_rows(entries, merge=True)), hide_index=True, width="stretch",
+                     height=min(36 * (2 * len(entries) + 1) + 4, 720))
+        bad = [e["records"][0]["mark"] for e in entries if not e["ok"]]
+        if bad:
+            st.warning(f"พื้น {', '.join(bad)} ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ")
+        st.caption("ระยะ Module ของแต่ละแผ่น: " + ", ".join(
+            f"{e['records'][0]['mark']} = {e['module'] * 10:.0f} mm" for e in entries))
         st.markdown("**หมายเหตุสำหรับแบบ**")
-        for n in schedule_notes(fc, grade, cover, [b for r in rows for b in r["_bars"]]):
+        for n in schedule_notes(fc, grade, cover, [b for e in entries for b in e["bars"]]):
             st.markdown(f"- {n}")
-        md = schedule_markdown(rows)
-        csv = df.drop(columns="สถานะ").to_csv(index=False).encode("utf-8-sig")
+        md = schedule_markdown(entries)
+        csv = pd.DataFrame(schedule_table_rows(entries, merge=False)).to_csv(index=False).encode("utf-8-sig")
         c = st.columns([1, 1, 1, 2])
         c[0].download_button("📊 Excel (.csv)", csv, "slab_schedule.csv", "text/csv")
         c[1].download_button("🖨️ PDF (A4 แนวนอน)", to_pdf(md, landscape=True, col_widths=PDF_COL_WIDTHS), "slab_schedule.pdf", "application/pdf")
         c[2].download_button("📄 Markdown", md, "slab_schedule.md", "text/markdown")
         with st.expander("ลบรายการ"):
-            drop = st.multiselect("เลือกพื้นที่จะลบ", [r["mark"] for r in rows])
+            drop = st.multiselect("เลือกพื้นที่จะลบ", [e["records"][0]["mark"] for e in entries])
             d1, d2 = st.columns(2)
             if d1.button("ลบที่เลือก", disabled=not drop):
                 for m in drop:
@@ -566,7 +604,7 @@ $$R_n = \frac{M_u}{\phi b d^2}, \qquad
 
 - $A_{s,min} = \rho_{temp}\, b\, h$ : 0.0020 (SR24, SD30), 0.0018 (SD40), $0.0018\times4000/f_y \ge 0.0014$ (fy > 4000)
 - $\rho \le \rho_{max} = 0.75\rho_b$, $\rho_b = \dfrac{0.85\beta_1 f'_c}{f_y}\dfrac{6120}{6120+f_y}$
-- ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 30 cm (ข้อกำหนดสำนักงาน; ACI ยอมให้ถึง 45 cm)
+- ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 300 mm; ระยะห่างทุกตำแหน่งในแผ่นเดียวกันหารลงตัวกับระยะ Module 300, 250 หรือ 200 mm (เลือก Module ที่ใช้เหล็กน้อยที่สุด) เหล็กทุกชุดจึงตรงแนวกัน
 
 **ตรวจสอบแรงเฉือน** $\phi V_c = \phi \cdot 0.53\sqrt{f'_c}\, b\, d$ (ksc)
 
@@ -588,7 +626,7 @@ h,min คูณด้วย (0.4 + fy/7000) สำหรับ fy ในหน�
 - ถ้า h < h,min แต่การแอ่นตัวผ่านเกณฑ์ ถือว่าใช้ได้ (ACI 9.5.2)
 
 ### ปริมาณวัสดุ (BOQ)
-- เหล็กล่างยาวเต็มช่วง + ฝัง 0.10 m แต่ละปลาย; เหล็กบนยื่น 0.3 × ช่วง (สองทาง: 0.3S) + 0.15 m
+- เหล็กล่างยาวเต็มช่วง + ฝัง 0.10 m แต่ละปลาย; เหล็กบนยาว L1 = Ln/4 (ขอบไม่ต่อเนื่อง) หรือ L2 = Ln/3 (ที่รองรับต่อเนื่อง) + 0.15 m; Type B/D/F มีเหล็กบนตลอดช่วง
 - เหล็กบนพื้นยื่นยาว 2L (ยื่น L + ยึดฝังช่วงใน L); น้ำหนักเหล็ก 0.785 kg/m ต่อ 1 cm² และเผื่อระยะทาบ/เศษตามที่กำหนด
 
 ### พื้นสองทาง — ACI 318-63 Method 2

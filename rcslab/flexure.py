@@ -8,6 +8,9 @@ from .materials import Concrete, DesignCode, Steel, bar_area
 B = 100.0  # strip width, cm
 SPACING_STEP = 2.5  # round spacing down to this increment, cm
 S_LIMIT = 30.0  # office detailing limit on any slab bar spacing, cm (code allows up to 45)
+S_MIN = 5.0  # smallest spacing offered, cm
+# Every spacing in one slab is a divisor of one module M (หรม./ครน.), so all bar sets line up every M.
+SPACING_MODULES = (30.0, 25.0, 20.0)
 
 
 @dataclass
@@ -26,6 +29,8 @@ class FlexureResult:
     phiMn: float  # kg-m per m
     ok: bool
     note: str = ""
+    h: float = 0.0  # slab thickness, cm
+    s_max: float = S_LIMIT  # largest spacing allowed at this position, cm
 
     @property
     def callout(self) -> str:
@@ -84,7 +89,9 @@ def design_flexure(
     conc: Concrete,
     steel: Steel,
     code: DesignCode,
+    spacing: float | None = None,
 ) -> FlexureResult:
+    """Design one position; `spacing` (cm) fixes the bar spacing instead of choosing it."""
     Mu = abs(Mu)
     Rn, rho = required_rho(Mu, d, conc, steel, code)
     As_min = steel.rho_temp * B * h
@@ -103,12 +110,12 @@ def design_flexure(
         As_design = max(As_req, As_min)
         if As_min > As_req:
             notes.append("ใช้ As,min (temperature & shrinkage)")
-    s = select_spacing(As_design, bar, s_max)
+    s = spacing if spacing else select_spacing(As_design, bar, s_max)
     As_prov = B * bar_area(bar) / s
     phiMn = moment_capacity(As_prov, d, conc, steel, code)
     if As_prov < As_design - 1e-9:
         ok = False
-        notes.append(f"{bar} ที่ระยะ {SPACING_STEP:g} cm ยังไม่พอ — เพิ่มขนาดเหล็ก")
+        notes.append(f"{bar} ที่ระยะ {s * 10:.0f} mm ยังไม่พอ — เพิ่มขนาดเหล็ก")
     if phiMn < Mu - 1e-6:
         ok = False
     return FlexureResult(
@@ -126,7 +133,60 @@ def design_flexure(
         phiMn=phiMn,
         ok=ok,
         note="; ".join(notes),
+        h=h,
+        s_max=s_max,
     )
+
+
+def module_spacings(module: float) -> list[float]:
+    """Spacings (cm, largest first) that divide the module exactly and are whole 2.5 cm steps."""
+    out = []
+    for n in range(1, 13):
+        s = module / n
+        if s < S_MIN - 1e-9:
+            break
+        if abs(s / SPACING_STEP - round(s / SPACING_STEP)) < 1e-9:
+            out.append(round(s, 4))
+    return out
+
+
+def pick_module_spacing(As_req: float, bar: str, s_max: float, module: float) -> float | None:
+    """Largest spacing from the module set that is ≤ s_max and gives As ≥ As_req (None if none does)."""
+    fits = [s for s in module_spacings(module) if s <= s_max + 1e-9 and B * bar_area(bar) / s >= As_req - 1e-9]
+    return max(fits) if fits else None
+
+
+def harmonize(
+    results: list[FlexureResult],
+    conc: Concrete,
+    steel: Steel,
+    code: DesignCode,
+    modules: tuple[float, ...] = SPACING_MODULES,
+) -> float:
+    """Re-space every position of one slab on a common module; returns the module (cm).
+
+    The module giving the least total steel wins (ties go to the larger module).
+    """
+    best = None
+    for M in modules:
+        if M > S_LIMIT + 1e-9:
+            continue
+        chosen, feasible = [], True
+        for r in results:
+            s = pick_module_spacing(r.As_design, r.bar, r.s_max, M)
+            if s is None:
+                feasible, s = False, module_spacings(M)[-1]
+            chosen.append(s)
+        score = sum(B * bar_area(r.bar) / s for r, s in zip(results, chosen))
+        key = (not feasible, round(score, 6), -M)
+        if best is None or key < best[0]:
+            best = (key, M, chosen)
+    _, M, chosen = best
+    for r, s in zip(results, chosen):
+        r.__dict__.update(
+            design_flexure(r.label, r.Mu, r.d, r.h, r.bar, r.s_max, conc, steel, code, spacing=s).__dict__
+        )
+    return M
 
 
 def check_shear(Vu: float, d: float, conc: Concrete, code: DesignCode) -> ShearResult:

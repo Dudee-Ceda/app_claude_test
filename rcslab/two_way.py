@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .flexure import S_LIMIT, FlexureResult, ShearResult, check_shear, design_flexure
+from .flexure import S_LIMIT, FlexureResult, ShearResult, check_shear, design_flexure, harmonize
 from .materials import Concrete, DesignCode, Steel, bar_dia
 
 M_RATIOS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
@@ -108,6 +108,8 @@ class TwoWayResult:
     beam_load_short_edge: float  # kg/m on beams along the short edges
     beam_load_long_edge: float  # kg/m on beams along the long edges
     notes: list[str] = field(default_factory=list)
+    temp: FlexureResult | None = None  # As,min mesh (top mesh of Type B, distribution bars)
+    module: float = S_LIMIT  # common spacing module of this slab, cm
 
     @property
     def is_two_way(self) -> bool:
@@ -176,6 +178,9 @@ def design_two_way(inp: TwoWayInput, conc: Concrete, steel: Steel, code: DesignC
         else:
             flex_long.append(design_flexure(key, Mu, d_long, inp.h, inp.bar, s_max, conc, steel, code))
 
+    temp = design_flexure("เหล็กกันร้าว (Temp.)", 0.0, d_long, inp.h, inp.bar, min(5 * inp.h, S_LIMIT), conc, steel, code)
+    module = harmonize(flex_short + flex_long + [temp], conc, steel, code)
+
     beam_short = wu * S / 3
     beam_long = wu * S / 3 * (3 - m**2) / 2
     shear = check_shear(max(beam_short, beam_long), d_short, conc, code)
@@ -213,4 +218,6 @@ def design_two_way(inp: TwoWayInput, conc: Concrete, steel: Steel, code: DesignC
         beam_load_short_edge=beam_short,
         beam_load_long_edge=beam_long,
         notes=notes,
+        temp=temp,
+        module=module,
     )

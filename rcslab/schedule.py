@@ -1,125 +1,71 @@
-"""Slab reinforcement schedule (ตารางเหล็กพื้น) in the layout used on Thai structural drawings."""
+"""Slab reinforcement schedule in the office drawing layout (S-08-5-xx: SLAB / SLAB TYPE / SECTION ...)."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
+from .detailing import NA, SlabDetail
 from .materials import BARS
-from .one_way import ONE_WAY_SUPPORTS, OneWayResult
-from .two_way import TwoWayResult
-
-NONE = "—"
 
 COLUMNS = {
-    "mark": "พื้น",
-    "kind": "ประเภท",
-    "t": "หนา (m)",
-    "size": "ขนาด (m)",
-    "load": "SDL / LL (kg/m²)",
-    "short_bot": "ทิศทางสั้น: ล่าง",
-    "short_top_cont": "ทิศทางสั้น: บน ขอบต่อเนื่อง",
-    "short_top_disc": "ทิศทางสั้น: บน ขอบไม่ต่อเนื่อง",
-    "long_bot": "ทิศทางยาว: ล่าง",
-    "long_top_cont": "ทิศทางยาว: บน ขอบต่อเนื่อง",
-    "long_top_disc": "ทิศทางยาว: บน ขอบไม่ต่อเนื่อง",
-    "remark": "หมายเหตุ",
+    "mark": "SLAB",
+    "slab_type": "SLAB TYPE",
+    "section": "SECTION",
+    "span": "SPAN (mm)",
+    "t": "T (mm)",
+    "l1": "L1 (mm)",
+    "l2": "L2 (mm)",
+    "camber": "CAMBER (mm)",
+    "b1": "Bottom Reinforcement 1",
+    "b2": "Bottom Reinforcement 2",
+    "t1": "Top Reinforcement 1",
+    "t2": "Top Reinforcement 2",
+    "t3": "Top Reinforcement 3",
+    "t4": "Top Reinforcement 4",
+    "t5": "Top Reinforcement 5",
+    "t6": "Top Reinforcement 6",
 }
-
-
-@dataclass
-class ScheduleRow:
-    mark: str
-    kind: str
-    t: str
-    size: str
-    load: str
-    short_bot: str
-    short_top_cont: str
-    short_top_disc: str
-    long_bot: str
-    long_top_cont: str
-    long_top_disc: str
-    remark: str
-    ok: bool = True
-
-    def as_dict(self) -> dict:
-        return asdict(self)
-
-
 # relative PDF column widths, in COLUMNS order
-PDF_COL_WIDTHS = (8, 13, 9, 19, 15, 20, 20, 20, 20, 20, 20, 44)
+PDF_COL_WIDTHS = (9, 8, 11, 9, 7, 8, 8, 11, 15, 15, 15, 15, 15, 15, 15, 15)
+
+# development length Ld in bar diameters, per the type details (SD30 taken as SD40)
+LD_FACTOR = {"SR24": 40, "SD30": 36, "SD40": 36, "SD50": 45}
 
 
 def drawing_callout(bar: str, spacing_cm: float) -> str:
-    """Compact callout as written on drawings, e.g. DB12@0.20, RB9@0.225."""
+    """Compact callout, e.g. DB12@0.20, RB9@0.225 (used in the report text)."""
     s = f"{spacing_cm / 100:.3f}".rstrip("0")
     if len(s.split(".")[1]) < 2:
         s += "0"
     return f"{bar}@{s}"
 
 
-def _callout(flex, kind: str) -> str:
-    f = next((f for f in flex if kind in f.label), None)
-    return drawing_callout(f.bar, f.spacing) if f else NONE
-
-
-def one_way_row(mark: str, res: OneWayResult, width: float) -> ScheduleRow:
-    inp = res.inp
-    name = ONE_WAY_SUPPORTS[inp.support].name
-    temp = drawing_callout(res.temp.bar, res.temp.spacing)
-    if name == "cantilever":
-        return ScheduleRow(
-            mark, "พื้นยื่น", f"{inp.h / 100:.2f}", f"ยื่น {inp.span:.2f} × {width:.2f}", f"{inp.sdl:.0f} / {inp.ll:.0f}",
-            temp, _callout(res.flexure, "-M ที่ยึดแน่น"), NONE,
-            temp, temp, NONE,
-            "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น; เหล็กล่างเป็นเหล็กกันร้าว"
-            + (f"; P ปลาย {inp.p_end:.0f} kg/m" if inp.p_end else ""),
-            res.ok,
-        )
-    remark = {
-        "simple": "ช่วงเดียว",
-        "one_end": "ต่อเนื่องปลายเดียว",
-        "one_end_2": "ต่อเนื่องปลายเดียว (2 ช่วง)",
-        "both_ends": "ต่อเนื่องสองปลาย",
-    }[name]
-    top_cont = _callout(res.flexure, "-M ที่รองรับต่อเนื่อง")
-    top_disc = _callout(res.flexure, "-M ที่รองรับไม่ต่อเนื่อง")
-    return ScheduleRow(
-        mark, "ทางเดียว", f"{inp.h / 100:.2f}", f"{inp.span:.2f} × {width:.2f}", f"{inp.sdl:.0f} / {inp.ll:.0f}",
-        _callout(res.flexure, "+M"), top_cont, top_disc,
-        temp, temp if top_cont != NONE else NONE, temp if top_disc != NONE else NONE,
-        remark + "; ทิศทางยาว = เหล็กกันร้าว (บนวางใต้เหล็กบนทิศทางสั้น)", res.ok,
-    )
-
-
-def two_way_row(mark: str, res: TwoWayResult) -> ScheduleRow:
-    inp = res.inp
-    return ScheduleRow(
-        mark, "สองทาง", f"{inp.h / 100:.2f}", f"{res.S:.2f} × {res.L:.2f}", f"{inp.sdl:.0f} / {inp.ll:.0f}",
-        _callout(res.flexure_short, "+M"), _callout(res.flexure_short, "ขอบต่อเนื่อง"),
-        _callout(res.flexure_short, "ขอบไม่ต่อเนื่อง"),
-        _callout(res.flexure_long, "+M"), _callout(res.flexure_long, "ขอบต่อเนื่อง"),
-        _callout(res.flexure_long, "ขอบไม่ต่อเนื่อง"),
-        f"Case {res.case}, m = {res.m:.2f}; เหล็กทิศทางยาววางชั้นใน", res.ok,
-    )
+def schedule_records(mark: str, detail: SlabDetail) -> list[dict]:
+    """Two records (CROSS, LONG) for one slab, keyed like COLUMNS."""
+    return [{"mark": mark, "slab_type": detail.slab_type} | asdict(row) for row in detail.rows()]
 
 
 def lap_length(bar: str) -> float:
-    """Tension lap length in m used on the schedule notes: 40db for DB, 48db + hooks for RB."""
+    """Tension lap length in m: 40db for DB, 48db + hooks for RB."""
     db = BARS[bar][0]
     factor = 48 if bar.startswith("RB") else 40
     return max(0.30, factor * db / 100)
 
 
 def schedule_notes(fc: float, grade: str, cover: float, bars: list[str]) -> list[str]:
-    laps = ", ".join(f"{b} ≥ {lap_length(b):.2f} m" for b in sorted(set(bars), key=lambda b: BARS[b][0]))
+    used = sorted(set(bars), key=lambda b: BARS[b][0])
+    ld = LD_FACTOR.get(grade, 36)
+    lds = ", ".join(f"{b} ≥ {max(0.30, ld * BARS[b][0] / 100):.2f} m" for b in used)
+    laps = ", ".join(f"{b} ≥ {lap_length(b):.2f} m" for b in used)
     return [
-        f"คอนกรีต f'c = {fc:.0f} ksc (ทรงกระบอก), เหล็กเสริม {grade}, ระยะหุ้มคอนกรีต {cover:.1f} cm",
-        "เหล็กล่างยาวตลอดช่วง ฝังเข้าคานอย่างน้อย 0.10 m",
-        "เหล็กบนยื่นจากขอบคาน 0.30L (L = ช่วงสั้นสำหรับพื้นสองทาง, ช่วงพื้นสำหรับพื้นทางเดียว)",
-        "พื้นสองทาง: เหล็กทิศทางสั้นวางชั้นนอก (ล่างสุด/บนสุด) เหล็กทิศทางยาววางชั้นใน",
+        f"คอนกรีต f'c = {fc:.0f} ksc (ทรงกระบอก), เหล็กเสริม {grade}, ระยะหุ้มคอนกรีต {cover * 10:.0f} mm",
+        "ตำแหน่งเหล็กและรูปตัดตามแบบมาตรฐาน RC SLAB TYPE A–L (S-08-1-01 ถึง S-08-1-05)",
+        "CROSS = รูปตัดทิศทางสั้น (ทิศทางหลักของพื้นทางเดียว), LONG = รูปตัดทิศทางยาว",
+        "L1, L2 วัดจากผิวที่รองรับ: L1 = Ln/4 ที่ขอบไม่ต่อเนื่อง, L2 = Ln/3 ข้างละที่รองรับต่อเนื่อง (ปัดขึ้น 100 mm); "
+        "พื้นยื่น L2 = ระยะตัดเหล็กเสริมพิเศษ Top 3",
+        "ระยะห่างเหล็กทุกตำแหน่งในแผ่นเดียวกันหารลงตัวกับระยะ Module (300, 250 หรือ 200 mm) "
+        "เหล็กทุกชุดจึงตรงแนวกันทุกระยะ Module และเหล็กเสริมพิเศษแทรกกึ่งกลางได้พอดี",
+        f"ระยะฝังยึดเต็มที่ (Fully developed) Ld ≥ {ld}d สำหรับ {grade}: {lds}",
         f"ระยะทาบเหล็ก: {laps} (RB ต้องงอขอ)",
-        "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 0.30 m และต้องไม่น้อยกว่า As,min",
-        "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
-        "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว ระยะห่างเหล็กทุกตำแหน่งไม่เกิน 0.30 m",
-        "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
-        "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
+        "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ระยะห่างไม่เกิน 300 mm",
+        "ค่าเหล็กเป็นของแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าได้ แต่ไม่เกิน 300 mm",
+        f"ช่อง {NA} = ไม่มีเหล็กตำแหน่งนี้ (ช่องขีดฆ่าในแบบ)",
     ]

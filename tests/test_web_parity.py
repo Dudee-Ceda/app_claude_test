@@ -40,16 +40,16 @@ const P = JSON.parse(process.argv[1]); const out = { ow: [], tw: [] };
 for (const [sup, L, h, sdl, ll, P_, code, fc, fy] of P.ow) {
   const c = RC.concrete(fc), s = RC.steel(fy);
   const r = RC.designOneWay({ span: L, h, support: sup, sdl, ll, cover: 2, mainBar: "DB12", pEnd: P_, xi: 2 }, c, s, RC.CODES[code]);
-  const q = RC.oneWayBoq(r, 4, 0.07);
+  const q = RC.oneWayBoq(r, 4, 0.07, sup === "cantilever" ? "G" : "D", 0.3);
   out.ow.push({ wu: r.wu, hMin: r.hMin, Mu: r.flexure.map(f => f.Mu), sp: r.flexure.map(f => f.spacing), tsp: r.temp.spacing,
-    Vu: r.shear.Vu, dL: r.deflection.dL, dLong: r.deflection.dLong, ok: r.ok, steel: q.total });
+    Vu: r.shear.Vu, dL: r.deflection.dL, dLong: r.deflection.dLong, ok: r.ok, steel: q.total, module: r.module });
 }
 for (const [x, y, h, e1, e2, e3, e4, code] of P.tw) {
   const c = RC.concrete(240), s = RC.steel(4000);
   const r = RC.designTwoWay({ x, y, h, sdl: 100, ll: 300, cover: 2, bar: "DB12", e1, e2, e3, e4 }, c, s, RC.CODES[code]);
-  const q = RC.twoWayBoq(r, 0.07);
+  const q = RC.twoWayBoq(r, 0.07, "B", 0.3);
   out.tw.push({ cs: r.cs, m: r.m, Mu: [...r.fShort, ...r.fLong].map(f => f.Mu), sp: [...r.fShort, ...r.fLong].map(f => f.spacing),
-    Vu: r.shear.Vu, ok: r.ok, steel: q.total });
+    Vu: r.shear.Vu, ok: r.ok, steel: q.total, module: r.module, tsp: r.temp.spacing });
 }
 console.log(JSON.stringify(out));
 """
@@ -75,7 +75,9 @@ def test_js_engine_matches_python():
         assert got["dL"] == pytest.approx(r.deflection.delta_L)
         assert got["dLong"] == pytest.approx(r.deflection.delta_long)
         assert got["ok"] == r.ok
-        assert got["steel"] == pytest.approx(one_way_boq(r, 4, 0.07).steel_total)
+        assert got["module"] == r.module
+        boq_type = "G" if sup == "cantilever" else "D"
+        assert got["steel"] == pytest.approx(one_way_boq(r, 4, 0.07, boq_type, 0.3).steel_total)
     for case, got in zip(TWO_WAY_CASES, js["tw"]):
         x, y, h, e1, e2, e3, e4, code = case
         r = design_two_way(TwoWayInput(x, y, h, 100, 300, e1, e2, e3, e4, 2.0, "DB12"),
@@ -86,41 +88,57 @@ def test_js_engine_matches_python():
         assert got["sp"] == [f.spacing for f in r.flexure_short + r.flexure_long]
         assert got["Vu"] == pytest.approx(r.shear.Vu)
         assert got["ok"] == r.ok
+        assert got["module"] == r.module and got["tsp"] == r.temp.spacing
         if r.is_two_way:
-            assert got["steel"] == pytest.approx(two_way_boq(r, 0.07).steel_total)
+            assert got["steel"] == pytest.approx(two_way_boq(r, 0.07, "B", 0.3).steel_total)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_js_schedule_rows_match_python():
-    from rcslab.schedule import COLUMNS, one_way_row, two_way_row
+def test_js_schedule_records_match_python():
+    from rcslab.detailing import detail_one_way, detail_two_way
+    from rcslab.schedule import COLUMNS, schedule_records
 
     engine = re.search(r"<script data-engine>(.*?)</script>", HTML.read_text(), re.S).group(1)
     driver = engine + """
 const P = JSON.parse(process.argv[1]); const out = [];
 const c = RC.concrete(240), s = RC.steel(4000), code = RC.CODES.eit;
-for (const [sup, L, h, p] of P.ow) {
-  const r = RC.designOneWay({ span: L, h, support: sup, sdl: 100, ll: 300, cover: 2, mainBar: "DB12", pEnd: p, xi: 2 }, c, s, code);
-  out.push(RC.oneWayRow("S", r, 4));
+for (const [sup, L, h, p, bar, type, width] of P.ow) {
+  const r = RC.designOneWay({ span: L, h, support: sup, sdl: 100, ll: 300, cover: 2, mainBar: bar, pEnd: p, xi: 2 }, c, s, code);
+  out.push(RC.scheduleRecords("S", RC.detailOneWay(r, width, type, 0.3)));
 }
-for (const [x, y, e1, e2, e3, e4] of P.tw) {
-  const r = RC.designTwoWay({ x, y, h: 12, sdl: 100, ll: 300, cover: 2, bar: "DB12", e1, e2, e3, e4 }, c, s, code);
-  out.push(RC.twoWayRow("S", r));
+for (const [x, y, h, e1, e2, e3, e4, bar, type] of P.tw) {
+  const r = RC.designTwoWay({ x, y, h, sdl: 100, ll: 400, cover: 2, bar, e1, e2, e3, e4 }, c, s, code);
+  out.push(RC.scheduleRecords("S", RC.detailTwoWay(r, type, 0.3)));
 }
 console.log(JSON.stringify(out));
 """
-    ow = [("simple", 3.0, 15, 0), ("one_end", 4.0, 14, 0), ("both_ends", 4.0, 12, 0), ("cantilever", 1.5, 15, 200)]
-    tw = [(4, 5, True, True, True, True), (5, 4, True, False, True, True), (3, 4, False, False, False, True)]
+    ow = [
+        ("simple", 3.0, 15, 0, "DB12", "C", 4.0),
+        ("one_end", 4.0, 14, 0, "DB12", "D", None),
+        ("both_ends", 4.5, 15, 0, "DB16", "E", 6.0),
+        ("cantilever", 2.0, 20, 400, "DB12", "G", None),
+        ("cantilever", 1.2, 15, 0, "DB10", "H", 3.0),
+    ]
+    tw = [
+        (4, 5, 12, True, True, True, True, "DB12", "A"),
+        (9, 10.5, 25, True, False, True, True, "DB16", "A"),
+        (6, 8, 20, True, False, False, True, "DB12", "B"),
+        (5, 4, 15, False, False, False, True, "DB10", "B"),
+    ]
     res = subprocess.run(["node", "-e", driver, json.dumps({"ow": ow, "tw": tw})], capture_output=True, text=True, check=True)
     js = json.loads(res.stdout)
     conc, steel, code = Concrete(240), Steel(4000), CODES[CODE_KEYS["eit"]]
     py = [
-        one_way_row("S", design_one_way(OneWayInput(L, h, SUPPORT_KEYS[sup], 100, 300, 2.0, "DB12", p), conc, steel, code), 4)
-        for sup, L, h, p in ow
+        schedule_records("S", detail_one_way(
+            design_one_way(OneWayInput(L, h, SUPPORT_KEYS[sup], 100, 300, 2.0, bar, p), conc, steel, code), width, typ, 0.3))
+        for sup, L, h, p, bar, typ, width in ow
     ] + [
-        two_way_row("S", design_two_way(TwoWayInput(x, y, 12, 100, 300, *edges, 2.0, "DB12"), conc, steel, code))
-        for x, y, *edges in tw
+        schedule_records("S", detail_two_way(
+            design_two_way(TwoWayInput(x, y, h, 100, 400, *edges, 2.0, bar), conc, steel, code), typ, 0.3))
+        for x, y, h, *edges, bar, typ in tw
     ]
+    assert len(js) == len(py)
     for got, want in zip(js, py):
-        for k in COLUMNS:
-            assert got[k] == getattr(want, k), k
-        assert got["ok"] == want.ok
+        for g, w in zip(got, want):
+            for k in COLUMNS:
+                assert g[k] == w[k], (w["mark"], w["section"], k, g[k], w[k])

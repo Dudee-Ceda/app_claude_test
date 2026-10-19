@@ -153,25 +153,84 @@ def test_pdf_render():
 
 
 # --------------------------------------------------------------------------- schedule
-from rcslab.schedule import NONE, drawing_callout, lap_length, one_way_row, two_way_row  # noqa: E402
+from rcslab.detailing import NA, cut_length, detail_one_way, detail_two_way, suggested_camber  # noqa: E402
+from rcslab.flexure import module_spacings  # noqa: E402
+from rcslab.schedule import COLUMNS, drawing_callout, lap_length, schedule_records  # noqa: E402
 
 
-def test_schedule_rows():
-    tw = design_two_way(TwoWayInput(5, 4, 12, 100, 200, True, False, True, True), CONC, SD40, CODE)
-    row = two_way_row("S1", tw)
-    assert row.size == "4.00 × 5.00" and row.t == "0.12"
-    f = next(f for f in tw.flexure_short if "+M" in f.label)
-    assert row.short_bot == drawing_callout(f.bar, f.spacing)
-    # X > Y: edges 3, 4 (length X) are the long edges, both continuous; edge 2 is a discontinuous short edge
-    assert row.short_top_disc == NONE and row.long_top_cont != NONE and row.long_top_disc != NONE
+def test_module_spacings_divide_module():
+    assert module_spacings(30) == [30, 15, 10, 7.5, 5]
+    assert module_spacings(25) == [25, 12.5, 5]
+    assert module_spacings(20) == [20, 10, 5]
+
+
+def _spacings_on_module(flex, module):
+    return all(abs(module / f.spacing - round(module / f.spacing)) < 1e-9 for f in flex)
+
+
+def test_harmonized_spacings_share_one_module():
+    cases = [
+        design_two_way(TwoWayInput(9, 10.5, 25, 100, 500, True, False, True, True, bar="DB16"), CONC, SD40, CODE),
+        design_two_way(TwoWayInput(6, 8, 20, 150, 400, True, False, False, True), CONC, SD40, CODE),
+    ]
+    for r in cases:
+        flex = r.flexure_short + r.flexure_long + [r.temp]
+        assert r.module in (30, 25, 20) and _spacings_on_module(flex, r.module)
+        assert all(f.As_prov >= f.As_design - 1e-9 and f.spacing <= 30 for f in flex)
+        assert r.ok
+    for sup in ONE_WAY_SUPPORTS:
+        r = design_one_way(OneWayInput(3.0, 15, sup, 100, 300), CONC, SD40, CODE)
+        assert _spacings_on_module(r.flexure + [r.temp], r.module)
+
+
+def test_cut_lengths_and_camber():
+    assert cut_length(5.7, 4) == pytest.approx(1.5)  # 1425 mm -> 1500
+    assert cut_length(5.7, 3) == pytest.approx(1.9)
+    assert suggested_camber(None, 9.0) == 20 and suggested_camber(None, 6.0) == 10
+    assert suggested_camber(12.1, 4) == 15 and suggested_camber(2, 4) == 10
+
+
+def test_two_way_schedule_rows_mirror_each_other():
+    tw = design_two_way(TwoWayInput(6, 8, 20, 150, 400, True, False, False, True), CONC, SD40, CODE)
+    cross, long = schedule_records("SA1", detail_two_way(tw, "A"))
+    assert (cross["section"], long["section"]) == ("CROSS", "LONG")
+    assert cross["span"] == "6,000" and long["span"] == "8,000" and cross["t"] == "200"
+    # even positions in one section are the other section's odd positions
+    assert cross["b2"] == long["b1"] and long["b2"] == cross["b1"]
+    assert cross["t2"] == long["t1"] and cross["t4"] == long["t3"]
+    assert cross["t5"] == NA  # Type A: no full-length top mesh
+    assert cross["l1"] == "1,500" and cross["l2"] == "1,900"
+    b_cross, _ = schedule_records("SA2", detail_two_way(tw, "B"))
+    assert b_cross["t5"].startswith("DB12 @") and b_cross["t6"].startswith("DB12 @")
+    assert set(cross) == set(COLUMNS)
+
+
+def test_one_way_and_cantilever_rows():
     ow = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
-    r1 = one_way_row("S2", ow, 4.0)
-    temp = drawing_callout(ow.temp.bar, ow.temp.spacing)
-    # simple span: top bars at both discontinuous ends, distribution bars under them, one bar size throughout
-    assert r1.short_top_cont == NONE and r1.short_top_disc.startswith("DB12@")
-    assert r1.long_bot == temp and r1.long_top_disc == temp and r1.long_top_cont == NONE
-    rc = one_way_row("S3", design_one_way(OneWayInput(1.2, 15, CANT, 100, 200), CONC, SD40, CODE), 3.0)
-    assert rc.short_bot.startswith("DB12@") and rc.short_top_cont.startswith("DB12@")
+    cross, long = schedule_records("S2", detail_one_way(ow, 4.0, "C"))
+    assert cross["slab_type"] == "C" and cross["t3"] == NA and cross["t1"] != NA  # simple span: edge top bars only
+    assert cross["b2"] == long["b1"] and long["t2"] == cross["t1"]
+    assert cross["l1"] == "700"  # (3.0 - 0.3) / 4 = 675 -> 700
+    cant = design_one_way(OneWayInput(2.0, 20, CANT, 100, 200, p_end=400), CONC, SD40, CODE)
+    det = detail_one_way(cant, None, "G")
+    cross, long = schedule_records("S3", det)
+    assert cross["t1"] == NA and cross["l1"] == NA and long["b1"] == NA and long["span"] == "VARIES"
+    main = cant.flexure[0]
+    # basic (Top 5) + extra (Top 3) cover the support moment, both on the slab module
+    total = 100 * 1.131 / det.cant_basic.spacing + (100 * 1.131 / det.cant_extra.spacing if det.cant_extra else 0)
+    assert total >= main.As_design - 1e-9
+    assert det.cant_extra is None or (cant.module / det.cant_extra.spacing) % 1 == 0
+    assert det.l2_cross is None or 0 < det.l2_cross <= 2.0
+
+
+def test_drawing_callout():
+    assert drawing_callout("DB12", 20) == "DB12@0.20"
+    assert drawing_callout("RB9", 22.5) == "RB9@0.225"
+
+
+def test_lap_length():
+    assert lap_length("DB12") == pytest.approx(0.48)
+    assert lap_length("RB6") == pytest.approx(0.30)
 
 
 def test_one_bar_size_per_slab():
@@ -187,18 +246,7 @@ def test_one_way_boq_counts_every_support():
     top = next(i for i in one_way_boq(res, 4.0).items if i.description.startswith("เหล็กบน"))
     assert top.count == 2 * (math.floor(400 / top.spacing) + 1)  # two continuous supports
     res = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
-    assert any("ไม่ต่อเนื่อง (2 ด้าน)" in i.description for i in one_way_boq(res, 4.0).items)
-
-
-def test_drawing_callout():
-    assert drawing_callout("DB12", 20) == "DB12@0.20"
-    assert drawing_callout("RB9", 22.5) == "RB9@0.225"
-    assert drawing_callout("DB10", 40) == "DB10@0.40"
-
-
-def test_lap_length():
-    assert lap_length("DB12") == pytest.approx(0.48)
-    assert lap_length("RB6") == pytest.approx(0.30)
+    assert any("× 2 ด้าน" in i.description for i in one_way_boq(res, 4.0).items)
 
 
 def test_spacing_never_exceeds_30cm():

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .deflection import DeflectionResult, one_way_deflection
-from .flexure import B, S_LIMIT, FlexureResult, ShearResult, check_shear, design_flexure
+from .flexure import B, S_LIMIT, FlexureResult, harmonize, ShearResult, check_shear, design_flexure
 from .materials import Concrete, DesignCode, Steel, bar_dia
 
 
@@ -59,6 +59,7 @@ class OneWayResult:
     shear: ShearResult
     deflection: DeflectionResult
     notes: list[str] = field(default_factory=list)
+    module: float = S_LIMIT  # common spacing module of this slab, cm
 
     @property
     def ok(self) -> bool:
@@ -97,6 +98,7 @@ def design_one_way(inp: OneWayInput, conc: Concrete, steel: Steel, code: DesignC
         design_flexure(k, m, d, inp.h, inp.main_bar, s_max, conc, steel, code) for k, m in moments.items()
     ]
     temp = design_flexure("เหล็กกันร้าว (Temp.)", 0.0, d, inp.h, inp.main_bar, s_temp, conc, steel, code)
+    module = harmonize(flexure + [temp], conc, steel, code)
 
     Vu = sup.shear * wu * L / 2 + p_u
     shear = check_shear(Vu, d, conc, code)
@@ -129,7 +131,7 @@ def design_one_way(inp: OneWayInput, conc: Concrete, steel: Steel, code: DesignC
         notes.append("ที่รองรับไม่ต่อเนื่องใส่เหล็กบนรับ −M = wL²/24 (ขอบหล่อติดคาน) เพื่อควบคุมรอยร้าว")
     if cantilever:
         notes.append("พื้นยื่น: เกณฑ์การแอ่นตัวเทียบกับช่วงเทียบเท่า 2L; เหล็กหลักอยู่บน ต้องยึดฝังเข้าช่วงในอย่างน้อย L")
-    return OneWayResult(inp, sw, wd, wu, h_min, h_ok, d, moments, flexure, temp, shear, deflection, notes)
+    return OneWayResult(inp, sw, wd, wu, h_min, h_ok, d, moments, flexure, temp, shear, deflection, notes, module)
 
 
 __all__ = ["B", "OneWayInput", "OneWayResult", "design_one_way", "ONE_WAY_SUPPORTS"]

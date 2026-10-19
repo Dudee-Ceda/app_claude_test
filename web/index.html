@@ -126,7 +126,12 @@ table.sched th.grp { text-align: center; border-bottom: 1px solid var(--muted); 
 table.sched td { white-space: nowrap; }
 table.sched td.bar { color: var(--fg); }
 table.sched td.note { white-space: normal; min-width: 200px; }
-table.sched td:first-child { min-width: 0; font-weight: 700; }
+table.sched td, table.sched th { border: 1px solid var(--line); text-align: center; }
+table.sched td.na { color: transparent; background:
+  linear-gradient(to top right, transparent calc(50% - 0.6px), var(--line) 50%, transparent calc(50% + 0.6px)),
+  linear-gradient(to bottom right, transparent calc(50% - 0.6px), var(--line) 50%, transparent calc(50% + 0.6px)); }
+table.sched td.mark { font-weight: 700; }
+.module-note { font-size: 12.5px; color: var(--muted); }
 button.ghost { font: inherit; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
 button.ghost:hover { color: var(--ng); border-color: var(--ng); }
 button.ghost.armed { color: var(--sheet); background: var(--ng); border-color: var(--ng); }
@@ -156,6 +161,8 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
       <input id="cover" type="number" min="1.5" max="5" step="0.5" value="2"></label>
     <label class="f">เผื่อระยะทาบ/เศษเหล็ก (%)
       <input id="waste" type="number" min="0" max="30" step="1" value="7"></label>
+    <label class="f">ความกว้างคาน/ที่รองรับ (mm)
+      <input id="supw" type="number" min="0" max="1500" step="50" value="300"></label>
     <div class="derived" id="derived"></div>
   </div>
 
@@ -184,13 +191,15 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
       </fieldset>
       <fieldset><h3>เหล็กเสริม</h3>
         <label class="f">ขนาดเหล็กเสริม <select id="ow_bar"></select></label>
+        <label class="f">SLAB TYPE (แบบมาตรฐาน) <select id="ow_type"></select></label>
         <small class="hint">ใช้ขนาดเดียวทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว</small>
       </fieldset>
     </form>
     <div class="sheet"><div class="sheet" id="out-ow"></div>
       <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
         <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="ow-mark" type="text" value="S1" maxlength="12"></label>
-          <button class="btn" type="button" id="ow-add">เพิ่ม/แทนที่ในตาราง</button><span id="ow-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
+          <button class="btn" type="button" id="ow-add">เพิ่ม/แทนที่ในตาราง</button><span id="ow-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div>
+        <div id="ow-preview"></div></section></div>
   </div>
 
   <!-- TWO-WAY -->
@@ -205,6 +214,7 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
         <label class="f">SDL (kg/m²) <input id="tw_sdl" type="number" min="0" max="2000" step="10" value="100"></label>
         <label class="f">LL (kg/m²) <input id="tw_ll" type="number" min="0" max="2000" step="10" value="200"></label>
         <label class="f">ขนาดเหล็กเสริม <select id="tw_bar"></select></label>
+        <label class="f">SLAB TYPE (แบบมาตรฐาน) <select id="tw_type"></select></label>
         <small class="hint">ใช้ขนาดเดียวทั้งแผ่น</small>
       </fieldset>
       <fieldset><h3>ขอบที่ต่อเนื่อง</h3>
@@ -217,7 +227,8 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
     <div class="sheet"><div class="sheet" id="out-tw"></div>
       <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
         <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="tw-mark" type="text" value="S1" maxlength="12"></label>
-          <button class="btn" type="button" id="tw-add">เพิ่ม/แทนที่ในตาราง</button><span id="tw-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
+          <button class="btn" type="button" id="tw-add">เพิ่ม/แทนที่ในตาราง</button><span id="tw-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div>
+        <div id="tw-preview"></div></section></div>
   </div>
 
   <!-- SCHEDULE -->
@@ -234,7 +245,7 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
         <li><code>Rn = Mu / (φ b d²)</code>, <code>ρ = 0.85f'c/fy · [1 − √(1 − 2Rn/0.85f'c)]</code></li>
         <li><code>As,min = ρtemp·b·h</code>: 0.0020 (SR24, SD30), 0.0018 (SD40), 0.0018×4000/fy ≥ 0.0014 (fy &gt; 4000)</li>
         <li><code>ρ ≤ 0.75ρb</code>, <code>ρb = 0.85β₁f'c/fy · 6120/(6120 + fy)</code></li>
-        <li>ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 30 cm (ข้อกำหนดสำนักงาน; ACI ยอมให้ถึง 45 cm) ปัดลงทีละ 2.5 cm</li>
+        <li>ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 300 mm; ระยะห่างทุกตำแหน่งในแผ่นเดียวกันหารลงตัวกับระยะ Module 300, 250 หรือ 200 mm (เลือก Module ที่ใช้เหล็กน้อยที่สุด) เหล็กทุกชุดจึงตรงแนวกัน</li>
         <li>แรงเฉือน <code>φVc = φ·0.53√f'c·b·d</code></li>
       </ul>
       <h2>พื้นทางเดียว: สัมประสิทธิ์ ACI</h2>
@@ -264,7 +275,7 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
       </ul>
       <h2>ปริมาณวัสดุ (BOQ)</h2>
       <ul>
-        <li>เหล็กล่างยาวเต็มช่วง + ฝัง 0.10 m แต่ละปลาย; เหล็กบนยื่น 0.3 × ช่วง (สองทาง: 0.3S) + 0.15 m</li>
+        <li>เหล็กล่างยาวเต็มช่วง + ฝัง 0.10 m แต่ละปลาย; เหล็กบนยาว L1 = Ln/4 (ขอบไม่ต่อเนื่อง) หรือ L2 = Ln/3 (ที่รองรับต่อเนื่อง) + 0.15 m; Type B/D/F มีเหล็กบนตลอดช่วง</li>
         <li>เหล็กบนพื้นยื่นยาว 2L; น้ำหนักเหล็ก 0.785 kg/m ต่อพื้นที่ 1 cm²</li>
       </ul>
       <p class="disclaimer">โปรแกรมนี้เป็นเครื่องมือช่วยคำนวณเบื้องต้น ผลลัพธ์ต้องได้รับการตรวจสอบและรับรองโดยวิศวกรโยธาผู้มีใบอนุญาต</p>
@@ -283,6 +294,9 @@ const RC = (() => {
   };
   const B = 100, STEP = 2.5, ES = 2.04e6;
   const S_LIMIT = 30; // office detailing limit on any slab bar spacing, cm (code allows up to 45)
+  const S_MIN = 5; // smallest spacing offered, cm
+  // Every spacing in one slab is a divisor of one module M (หรม./ครน.), so all bar sets line up every M.
+  const SPACING_MODULES = [30, 25, 20];
 
   const concrete = (fc, uw = 2400) => ({
     fc, uw,
@@ -296,7 +310,7 @@ const RC = (() => {
   const rhoBal = (c, s) => 0.85 * c.beta1 * c.fc / s.fy * 6120 / (6120 + s.fy);
   const rhoMax = (c, s) => 0.75 * rhoBal(c, s);
 
-  function designFlexure(label, Mu, d, h, bar, sMax, c, s, code) {
+  function designFlexure(label, Mu, d, h, bar, sMax, c, s, code, spacing = null) {
     Mu = Math.abs(Mu);
     const Rn = Mu * 100 / (code.phiB * B * d * d);
     const k = 1 - 2 * Rn / (0.85 * c.fc);
@@ -314,16 +328,51 @@ const RC = (() => {
       if (AsMin > AsReq) notes.push("ใช้ As,min (temperature & shrinkage)");
     }
     const area = BARS[bar][1];
-    let sp = AsDesign > 0 ? B * area / AsDesign : sMax;
-    sp = Math.floor(sp / STEP + 1e-9) * STEP;
-    sp = Math.max(STEP, Math.min(sp, sMax));
+    let sp = spacing;
+    if (!sp) {
+      sp = AsDesign > 0 ? B * area / AsDesign : sMax;
+      sp = Math.floor(sp / STEP + 1e-9) * STEP;
+      sp = Math.max(STEP, Math.min(sp, sMax));
+    }
     const AsProv = B * area / sp;
     const a = AsProv * s.fy / (0.85 * c.fc * B);
     const phiMn = code.phiB * AsProv * s.fy * (d - a / 2) / 100;
-    if (AsProv < AsDesign - 1e-9) { ok = false; notes.push(`${bar} ที่ระยะ ${STEP} cm ยังไม่พอ — เพิ่มขนาดเหล็ก`); }
+    if (AsProv < AsDesign - 1e-9) { ok = false; notes.push(`${bar} ที่ระยะ ${(sp * 10).toFixed(0)} mm ยังไม่พอ — เพิ่มขนาดเหล็ก`); }
     if (phiMn < Mu - 1e-6) ok = false;
     return { label, Mu, d, Rn, rho, AsReq, AsMin, AsDesign, bar, spacing: sp, AsProv, phiMn, ok, note: notes.join("; "),
-      callout: `${bar} @ ${(sp / 100).toFixed(3)} m` };
+      callout: `${bar} @ ${(sp * 10).toFixed(0)} mm`, h, sMax };
+  }
+  function moduleSpacings(M) {
+    const out = [];
+    for (let n = 1; n < 13; n++) {
+      const sp = M / n;
+      if (sp < S_MIN - 1e-9) break;
+      if (Math.abs(sp / STEP - Math.round(sp / STEP)) < 1e-9) out.push(Math.round(sp * 1e4) / 1e4);
+    }
+    return out;
+  }
+  function pickModuleSpacing(AsReq, bar, sMax, M) {
+    const fits = moduleSpacings(M).filter((sp) => sp <= sMax + 1e-9 && B * BARS[bar][1] / sp >= AsReq - 1e-9);
+    return fits.length ? Math.max(...fits) : null;
+  }
+  // Re-space every position of one slab on a common module; the module with the least steel wins.
+  function harmonize(results, c, s, code) {
+    let best = null;
+    for (const M of SPACING_MODULES) {
+      if (M > S_LIMIT + 1e-9) continue;
+      let feasible = true;
+      const chosen = results.map((r) => {
+        const sp = pickModuleSpacing(r.AsDesign, r.bar, r.sMax, M);
+        if (sp === null) { feasible = false; const all = moduleSpacings(M); return all[all.length - 1]; }
+        return sp;
+      });
+      const score = Math.round(results.reduce((a, r, i) => a + B * BARS[r.bar][1] / chosen[i], 0) * 1e6) / 1e6;
+      const key = [feasible ? 0 : 1, score, -M];
+      const less = !best || key[0] < best.key[0] || (key[0] === best.key[0] && (key[1] < best.key[1] || (key[1] === best.key[1] && key[2] < best.key[2])));
+      if (less) best = { key, M, chosen };
+    }
+    results.forEach((r, i) => Object.assign(r, designFlexure(r.label, r.Mu, r.d, r.h, r.bar, r.sMax, c, s, code, best.chosen[i])));
+    return best.M;
   }
   function checkShear(Vu, d, c, code) {
     const phiVc = code.phiV * 0.53 * Math.sqrt(c.fc) * B * d;
@@ -381,6 +430,7 @@ const RC = (() => {
     if (sup.negDisc) moments.push(["-M ที่รองรับไม่ต่อเนื่อง", wu * L * L / sup.negDisc]);
     const flexure = moments.map(([k, m]) => designFlexure(k, m, d, inp.h, inp.mainBar, sMax, c, s, code));
     const temp = designFlexure("เหล็กกันร้าว (Temp.)", 0, d, inp.h, inp.mainBar, sTemp, c, s, code);
+    const module = harmonize([...flexure, temp], c, s, code);
     const shear = checkShear(sup.shear * wu * L / 2 + pu, d, c, code);
     const crit = flexure[0];
     const deflection = oneWayDeflection(inp.support === "one_end_2" ? "one_end" : inp.support, L, inp.h, d, crit.AsProv,
@@ -393,7 +443,7 @@ const RC = (() => {
     if (inp.support === "simple") notes.push("ที่รองรับไม่ต่อเนื่องใส่เหล็กบนรับ −M = wL²/24 (ขอบหล่อติดคาน) เพื่อควบคุมรอยร้าว");
     if (cant) notes.push("พื้นยื่น: เกณฑ์การแอ่นตัวเทียบกับช่วงเทียบเท่า 2L; เหล็กหลักอยู่บน ต้องยึดฝังเข้าช่วงในอย่างน้อย L");
     const ok = (hOk || deflection.ok) && shear.ok && flexure.every(f => f.ok) && temp.ok;
-    return { inp, sup, sw, wd, wu, pu, hMin, hOk, d, moments, flexure, temp, shear, deflection, notes, ok };
+    return { inp, sup, sw, wd, wu, pu, hMin, hOk, d, moments, flexure, temp, shear, deflection, notes, ok, module };
   }
 
   // ---------------- two-way (ACI 318-63 Method 2)
@@ -445,6 +495,8 @@ const RC = (() => {
       f.C = r.C; f.kind = r.kind;
       (r.dir === "short" ? fShort : fLong).push(f);
     }
+    const temp = designFlexure("เหล็กกันร้าว (Temp.)", 0, dL, inp.h, inp.bar, Math.min(5 * inp.h, S_LIMIT), c, s, code);
+    const module = harmonize([...fShort, ...fLong, temp], c, s, code);
     const beamShort = wu * S / 3, beamLong = wu * S / 3 * (3 - m * m) / 2;
     const shear = checkShear(Math.max(beamShort, beamLong), dS, c, code);
     const notes = [];
@@ -455,11 +507,99 @@ const RC = (() => {
     notes.push("ถ้าโมเมนต์ลบสองข้างของคานไม่เท่ากัน ให้ใช้ค่าที่มากกว่า หรือกระจายโมเมนต์ส่วนต่างตามสติฟเนส");
     const isTwoWay = m >= 0.5;
     const ok = isTwoWay && hOk && shear.ok && [...fShort, ...fLong].every(f => f.ok);
-    return { inp, swapped, S, L, m, cs, sw, wd, wu, hMin, hOk, dS, dL, fShort, fLong, shear, beamShort, beamLong, notes, isTwoWay, ok };
+    return { inp, swapped, S, L, m, cs, sw, wd, wu, hMin, hOk, dS, dL, fShort, fLong, shear, beamShort, beamLong, notes, isTwoWay, ok, temp, module };
+  }
+
+  // ---------------- detailing (office standard RC SLAB TYPE A–L, S-08-1-01..05)
+  // Per section: odd positions run in the section plane, even positions are the bars at right angles.
+  // BOTTOM 1/2 bottom bars; TOP 1/2 at a discontinuous edge (cut L1); TOP 3/4 over a continuous support
+  // (cut L2 each side); TOP 5/6 full-length top mesh (Types B, D, F and cantilevers).
+  const NA = "—";
+  const TWO_WAY_TYPES = ["A", "B"], ONE_WAY_TYPES = ["C", "D", "E", "F"], CANTILEVER_TYPES = ["G", "H", "I", "J", "K", "L"];
+  const MESH_TYPES = new Set(["B", "D", "F"]);
+  const TYPE_LABELS = {
+    A: "A — พื้นสองทาง เหล็กบนเฉพาะที่รองรับ", B: "B — พื้นสองทาง + เหล็กบนตลอดช่วง",
+    C: "C — พื้นทางเดียว เหล็กบนเฉพาะที่รองรับ", D: "D — พื้นทางเดียว + เหล็กบนตลอดช่วง",
+    E: "E — พื้นทางเดียว (ตามแบบ S-08-1-03)", F: "F — พื้นทางเดียว + เหล็กบนตลอดช่วง (ตามแบบ S-08-1-03)",
+    G: "G — พื้นยื่น ฝังในคาน", H: "H — พื้นยื่น ฝังในเสาหรือผนัง",
+    I: "I — พื้นยื่นมีช่วงใน (ตามแบบ S-08-1-04)", J: "J — พื้นยื่นมีช่วงใน (ตามแบบ S-08-1-04)",
+    K: "K — พื้นยื่นจากผนัง (ตามแบบ S-08-1-04)", L: "L — พื้นยื่นจากผนัง (ตามแบบ S-08-1-05)",
+  };
+  const callout = (bar, sp) => `${bar} @ ${(sp * 10).toFixed(0)} mm`;
+  const cutLength = (Ln, div) => Math.ceil(Math.max(Ln, 0) * 1000 / div / 100 - 1e-9) * 0.1;
+  const suggestedCamber = (deltaMm, S) => deltaMm === null ? (S >= 8 ? 20 : 10) : Math.max(10, Math.ceil(deltaMm / 5 - 1e-9) * 5);
+  const pos = (f) => f ? { bar: f.bar, spacing: f.spacing } : null;
+  const pickF = (fl, key) => fl.find((f) => f.label.includes(key)) || null;
+  const mmTxt = (v) => v === null || v === undefined ? NA : Math.round(v * 1000).toLocaleString("en-US");
+  const posTxt = (p) => p ? callout(p.bar, p.spacing) : NA;
+
+  function detailTwoWay(r, type = "A", supportW = 0.30) {
+    type = TWO_WAY_TYPES.includes(type) ? type : "A";
+    const temp = pos(r.temp);
+    const d = { kind: "two_way", type, h: r.inp.h, module: r.module, camber: suggestedCamber(null, r.S), bar: r.inp.bar, ok: r.ok,
+      spanCross: r.S, spanLong: r.L };
+    for (const [dir, fl, span] of [["cross", r.fShort, r.S], ["long", r.fLong, r.L]]) {
+      const bars = { b: pos(pickF(fl, "+M")), tDisc: pos(pickF(fl, "ขอบไม่ต่อเนื่อง")), tCont: pos(pickF(fl, "ขอบต่อเนื่อง")), mesh: temp, dist: temp };
+      d[dir] = bars;
+      const Ln = span - supportW;
+      d["l1_" + dir] = bars.tDisc ? cutLength(Ln, 4) : null;
+      d["l2_" + dir] = bars.tCont ? cutLength(Ln, 3) : null;
+    }
+    return d;
+  }
+  function detailOneWay(r, width, type = "", supportW = 0.30) {
+    const i = r.inp, temp = pos(r.temp), dl = r.deflection, L = i.span;
+    const camber = suggestedCamber((1 + dl.lam) * dl.dD * 10, L);
+    if (i.support === "cantilever") {
+      type = CANTILEVER_TYPES.includes(type) ? type : "G";
+      const d = { kind: "cantilever", type, h: i.h, module: r.module, camber, bar: i.mainBar, ok: r.ok, spanCross: L, spanLong: width,
+        cross: { dist: temp }, l1_cross: null, l2_cross: null, cantBasic: temp, cantExtra: null };
+      const main = r.flexure[0], basic = r.temp, need = main.AsDesign - basic.AsProv;
+      if (need > 1e-9) {
+        let sp = pickModuleSpacing(need, i.mainBar, main.sMax, r.module);
+        if (sp === null) sp = main.spacing;
+        d.cantExtra = { bar: i.mainBar, spacing: sp };
+        const wu = r.wu, pu = (r.moments[0][1] - r.wu * L * L / 2) / L;
+        const a = (-pu + Math.sqrt(pu * pu + 2 * wu * basic.phiMn)) / wu;
+        const x = Math.max(L - a, 0), ext = Math.max(main.d, 12 * BARS[i.mainBar][0]) / 100;
+        d.l2_cross = Math.min(Math.ceil((x + ext) * 10 - 1e-9) / 10, L);
+      }
+      return d;
+    }
+    type = ONE_WAY_TYPES.includes(type) ? type : "C";
+    const d = { kind: "one_way", type, h: i.h, module: r.module, camber, bar: i.mainBar, ok: r.ok, spanCross: L, spanLong: width };
+    d.cross = { b: pos(pickF(r.flexure, "+M")), tDisc: pos(pickF(r.flexure, "ไม่ต่อเนื่อง")), tCont: pos(pickF(r.flexure, "-M ที่รองรับต่อเนื่อง")), mesh: temp, dist: temp };
+    d.long = { b: temp, tDisc: d.cross.tDisc ? temp : null, tCont: d.cross.tCont ? temp : null, mesh: temp, dist: temp };
+    const Ln = L - supportW;
+    d.l1_cross = d.cross.tDisc ? cutLength(Ln, 4) : null;
+    d.l2_cross = d.cross.tCont ? cutLength(Ln, 3) : null;
+    d.l1_long = d.l2_long = null;
+    return d;
+  }
+  function detailRows(d) {
+    const t = (d.h * 10).toFixed(0), camber = d.camber ? String(d.camber) : NA;
+    const blank = { b1: NA, b2: NA, t1: NA, t2: NA, t3: NA, t4: NA, t5: NA, t6: NA };
+    if (d.kind === "cantilever") {
+      const dist = posTxt(d.cross.dist), extra = d.cantExtra;
+      return [
+        { section: "CROSS", span: mmTxt(d.spanCross), t, l1: NA, l2: mmTxt(d.l2_cross), camber, ...blank,
+          b1: dist, b2: dist, t3: posTxt(extra), t4: extra ? dist : NA, t5: posTxt(d.cantBasic), t6: dist },
+        { section: "LONG", span: d.spanLong == null ? "VARIES" : mmTxt(d.spanLong), t, l1: NA, l2: NA, camber: NA, ...blank },
+      ];
+    }
+    return [["CROSS", d.cross, d.long, d.spanCross, d.l1_cross, d.l2_cross], ["LONG", d.long, d.cross, d.spanLong, d.l1_long, d.l2_long]]
+      .map(([section, me, other, span, l1, l2]) => {
+        const row = { section, span: span == null ? "VARIES" : mmTxt(span), t, l1: mmTxt(l1), l2: mmTxt(l2), camber, ...blank,
+          b1: posTxt(me.b), b2: posTxt(other.b), t1: posTxt(me.tDisc), t3: posTxt(me.tCont) };
+        row.t2 = me.tDisc ? posTxt(other.tDisc || other.dist) : NA;
+        row.t4 = me.tCont ? posTxt(other.tCont || other.dist) : NA;
+        if (MESH_TYPES.has(d.type)) { row.t5 = posTxt(me.mesh); row.t6 = posTxt(other.mesh); }
+        return row;
+      });
   }
 
   // ---------------- BOQ
-  const DENS = 0.785, EMBED = 0.10, ANCHOR = 0.15, TOP_EXT = 0.30;
+  const DENS = 0.785, EMBED = 0.10, ANCHOR = 0.15;
   const countBars = (w, sp) => Math.floor(w * 100 / sp + 1e-9) + 1;
   const item = (desc, f, run, len, sides = 1) => {
     const count = sides * countBars(run, f.spacing), total = count * len;
@@ -471,90 +611,81 @@ const RC = (() => {
     for (const i of items) byBar[i.bar] = (byBar[i.bar] || 0) + i.weight * (1 + waste);
     return { area, h, waste, items, concrete: conc, formwork: area, net, total, byBar, ratio: conc ? total / conc : 0 };
   }
-  function oneWayBoq(r, width, waste) {
-    const L = r.inp.span, items = [], by = Object.fromEntries(r.flexure.map(f => [f.label, f])), temp = r.temp, sup = r.sup;
+  function oneWayBoq(r, width, waste, type = "", supportW = 0.30) {
+    const L = r.inp.span, items = [], temp = r.temp, sup = r.sup, det = detailOneWay(r, width, type, supportW);
     if (r.inp.support === "cantilever") {
-      items.push(item("เหล็กบน (หลัก) พื้นยื่น", by["-M ที่ยึดแน่น"], width, 2 * L));
-      items.push(item("เหล็กกันร้าวบน (ใต้เหล็กหลัก)", temp, 2 * L, width));
-      items.push(item("เหล็กล่างทิศทางสั้น (กันร้าว)", temp, width, L + EMBED));
-      items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
+      items.push(item("เหล็กบนตลอดความยาว (Top 5)", det.cantBasic, width, 2 * L));
+      if (det.cantExtra) items.push(item("เหล็กบนเสริมพิเศษ (Top 3)", det.cantExtra, width, det.l2_cross + L));
+      items.push(item("เหล็กบนตั้งฉาก (Top 6)", temp, 2 * L, width));
+      items.push(item("เหล็กล่างทิศทางยื่น (Bottom 1)", temp, width, L + EMBED));
+      items.push(item("เหล็กล่างตั้งฉาก (Bottom 2)", temp, L, width));
       return summarize(L * width, r.inp.h, waste, items);
     }
-    const ext = TOP_EXT * L + ANCHOR;
-    items.push(item("เหล็กล่าง (หลัก)", by["+M กลางช่วง"], width, L + 2 * EMBED));
-    items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
-    for (const [lb, sides] of [["-M ที่รองรับต่อเนื่อง", sup.nCont], ["-M ที่รองรับไม่ต่อเนื่อง", sup.nDisc]]) {
-      if (!by[lb] || !sides) continue;
-      const where = lb.slice(3) + (sides > 1 ? ` (${sides} ด้าน)` : "");
-      items.push(item("เหล็กบน " + where, by[lb], width, ext, sides));
-      items.push(item("เหล็กกันร้าวบน " + where, temp, TOP_EXT * L, width, sides));
+    const c = det.cross, mesh = MESH_TYPES.has(det.type);
+    items.push(item("เหล็กล่างทิศทางหลัก (Bottom 1)", c.b, width, L + 2 * EMBED));
+    items.push(item("เหล็กล่างทิศทางรอง (Bottom 2)", temp, L, width));
+    for (const [key, cut, sides, name] of [["tDisc", det.l1_cross, sup.nDisc, "ขอบไม่ต่อเนื่อง (Top 1)"], ["tCont", det.l2_cross, sup.nCont, "ที่รองรับต่อเนื่อง (Top 3)"]]) {
+      if (!c[key] || !sides) continue;
+      const where = name + (sides > 1 ? ` × ${sides} ด้าน` : "");
+      items.push(item("เหล็กบน " + where, c[key], width, cut + ANCHOR, sides));
+      if (!mesh) items.push(item("เหล็กบนตั้งฉาก " + where, temp, cut, width, sides));
+    }
+    if (mesh) {
+      items.push(item("เหล็กบนตลอดช่วง ทิศทางหลัก (Top 5)", temp, width, L + 2 * EMBED));
+      items.push(item("เหล็กบนตลอดช่วง ทิศทางรอง (Top 6)", temp, L, width));
     }
     return summarize(L * width, r.inp.h, waste, items);
   }
-  function twoWayBoq(r, waste) {
-    const { x: X, y: Y } = r.inp;
-    const fx = r.swapped ? r.fLong : r.fShort, fy = r.swapped ? r.fShort : r.fLong;
-    const pick = (fl, kind) => fl.find(f => f.kind === kind);
-    const ext = TOP_EXT * r.S + ANCHOR, items = [];
-    items.push(item("เหล็กล่าง แนว X", pick(fx, "pos"), Y, X + 2 * EMBED));
-    items.push(item("เหล็กล่าง แนว Y", pick(fy, "pos"), X, Y + 2 * EMBED));
-    for (const [name, cont, fl, len] of [["ขอบ 1", r.inp.e1, fx, Y], ["ขอบ 2", r.inp.e2, fx, Y], ["ขอบ 3", r.inp.e3, fy, X], ["ขอบ 4", r.inp.e4, fy, X]])
-      items.push(item(`เหล็กบน ${name} (${cont ? "ต่อเนื่อง" : "ไม่ต่อเนื่อง"})`, pick(fl, cont ? "negCont" : "negDisc"), len, ext));
+  function twoWayBoq(r, waste, type = "A", supportW = 0.30) {
+    const { x: X, y: Y } = r.inp, det = detailTwoWay(r, type, supportW), items = [];
+    const [dx, dy] = r.swapped ? [det.long, det.cross] : [det.cross, det.long];
+    const cutX = r.swapped ? [det.l1_long, det.l2_long] : [det.l1_cross, det.l2_cross];
+    const cutY = r.swapped ? [det.l1_cross, det.l2_cross] : [det.l1_long, det.l2_long];
+    items.push(item("เหล็กล่าง แนว X", dx.b, Y, X + 2 * EMBED));
+    items.push(item("เหล็กล่าง แนว Y", dy.b, X, Y + 2 * EMBED));
+    for (const [name, cont, bars, cuts, len] of [["ขอบ 1", r.inp.e1, dx, cutX, Y], ["ขอบ 2", r.inp.e2, dx, cutX, Y], ["ขอบ 3", r.inp.e3, dy, cutY, X], ["ขอบ 4", r.inp.e4, dy, cutY, X]])
+      items.push(item(`เหล็กบน ${name} (${cont ? "ต่อเนื่อง, Top 3" : "ไม่ต่อเนื่อง, Top 1"})`, cont ? bars.tCont : bars.tDisc, len, (cont ? cuts[1] : cuts[0]) + ANCHOR));
+    if (MESH_TYPES.has(det.type)) {
+      items.push(item("เหล็กบนตลอดช่วง แนว X (Top 5/6)", r.temp, Y, X + 2 * EMBED));
+      items.push(item("เหล็กบนตลอดช่วง แนว Y (Top 5/6)", r.temp, X, Y + 2 * EMBED));
+    }
     return summarize(X * Y, r.inp.h, waste, items);
   }
 
-  // ---------------- slab schedule (ตารางเหล็กพื้น)
-  const NONE = "—";
+  // ---------------- slab schedule (office layout, S-08-5-xx)
+  const SCHEDULE_COLUMNS = { mark: "SLAB", slab_type: "SLAB TYPE", section: "SECTION", span: "SPAN (mm)", t: "T (mm)", l1: "L1 (mm)",
+    l2: "L2 (mm)", camber: "CAMBER (mm)", b1: "Bottom Reinforcement 1", b2: "Bottom Reinforcement 2", t1: "Top Reinforcement 1",
+    t2: "Top Reinforcement 2", t3: "Top Reinforcement 3", t4: "Top Reinforcement 4", t5: "Top Reinforcement 5", t6: "Top Reinforcement 6" };
+  const LD_FACTOR = { SR24: 40, SD30: 36, SD40: 36, SD50: 45 };
+  const scheduleRecords = (mark, d) => detailRows(d).map((row) => ({ mark, slab_type: d.type, ...row }));
   function drawingCallout(bar, sp) {
     let s = (sp / 100).toFixed(3).replace(/0+$/, "");
     if (s.split(".")[1].length < 2) s += "0";
     return `${bar}@${s}`;
   }
-  const co = (fl, kind) => { const f = fl.find((x) => x.label.includes(kind)); return f ? drawingCallout(f.bar, f.spacing) : NONE; };
-  const ld = (i) => `${i.sdl.toFixed(0)} / ${i.ll.toFixed(0)}`;
-  function oneWayRow(mark, r, width) {
-    const i = r.inp, temp = drawingCallout(r.temp.bar, r.temp.spacing);
-    if (i.support === "cantilever")
-      return { mark, kind: "พื้นยื่น", t: (i.h / 100).toFixed(2), size: `ยื่น ${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
-        short_bot: temp, short_top_cont: co(r.flexure, "-M ที่ยึดแน่น"), short_top_disc: NONE, long_bot: temp, long_top_cont: temp, long_top_disc: NONE,
-        remark: "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น; เหล็กล่างเป็นเหล็กกันร้าว" + (i.pEnd ? `; P ปลาย ${i.pEnd.toFixed(0)} kg/m` : ""), ok: r.ok, bars: [i.mainBar] };
-    const remark = { simple: "ช่วงเดียว", one_end: "ต่อเนื่องปลายเดียว", one_end_2: "ต่อเนื่องปลายเดียว (2 ช่วง)", both_ends: "ต่อเนื่องสองปลาย" }[i.support];
-    const topCont = co(r.flexure, "-M ที่รองรับต่อเนื่อง"), topDisc = co(r.flexure, "-M ที่รองรับไม่ต่อเนื่อง");
-    return { mark, kind: "ทางเดียว", t: (i.h / 100).toFixed(2), size: `${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
-      short_bot: co(r.flexure, "+M"), short_top_cont: topCont, short_top_disc: topDisc,
-      long_bot: temp, long_top_cont: topCont !== NONE ? temp : NONE, long_top_disc: topDisc !== NONE ? temp : NONE,
-      remark: remark + "; ทิศทางยาว = เหล็กกันร้าว (บนวางใต้เหล็กบนทิศทางสั้น)", ok: r.ok, bars: [i.mainBar] };
-  }
-  function twoWayRow(mark, r) {
-    const i = r.inp;
-    return { mark, kind: "สองทาง", t: (i.h / 100).toFixed(2), size: `${r.S.toFixed(2)} × ${r.L.toFixed(2)}`, load: ld(i),
-      short_bot: co(r.fShort, "+M"), short_top_cont: co(r.fShort, "ขอบต่อเนื่อง"), short_top_disc: co(r.fShort, "ขอบไม่ต่อเนื่อง"),
-      long_bot: co(r.fLong, "+M"), long_top_cont: co(r.fLong, "ขอบต่อเนื่อง"), long_top_disc: co(r.fLong, "ขอบไม่ต่อเนื่อง"),
-      remark: `Case ${r.cs}, m = ${r.m.toFixed(2)}; เหล็กทิศทางยาววางชั้นใน`, ok: r.ok, bars: [i.bar] };
-  }
   const lapLength = (bar) => Math.max(0.30, (bar.startsWith("RB") ? 48 : 40) * BARS[bar][0] / 100);
   function scheduleNotes(fc, grade, cover, bars) {
-    const laps = [...new Set(bars)].sort((a, b) => BARS[a][0] - BARS[b][0]).map((b) => `${b} ≥ ${lapLength(b).toFixed(2)} m`).join(", ");
+    const used = [...new Set(bars)].sort((a, b) => BARS[a][0] - BARS[b][0]), ld = LD_FACTOR[grade] || 36;
+    const lds = used.map((b) => `${b} ≥ ${Math.max(0.30, ld * BARS[b][0] / 100).toFixed(2)} m`).join(", ");
+    const laps = used.map((b) => `${b} ≥ ${lapLength(b).toFixed(2)} m`).join(", ");
     return [
-      `คอนกรีต f'c = ${fc.toFixed(0)} ksc (ทรงกระบอก), เหล็กเสริม ${grade}, ระยะหุ้มคอนกรีต ${cover.toFixed(1)} cm`,
-      "เหล็กล่างยาวตลอดช่วง ฝังเข้าคานอย่างน้อย 0.10 m",
-      "เหล็กบนยื่นจากขอบคาน 0.30L (L = ช่วงสั้นสำหรับพื้นสองทาง, ช่วงพื้นสำหรับพื้นทางเดียว)",
-      "พื้นสองทาง: เหล็กทิศทางสั้นวางชั้นนอก (ล่างสุด/บนสุด) เหล็กทิศทางยาววางชั้นใน",
+      `คอนกรีต f'c = ${fc.toFixed(0)} ksc (ทรงกระบอก), เหล็กเสริม ${grade}, ระยะหุ้มคอนกรีต ${(cover * 10).toFixed(0)} mm`,
+      "ตำแหน่งเหล็กและรูปตัดตามแบบมาตรฐาน RC SLAB TYPE A–L (S-08-1-01 ถึง S-08-1-05)",
+      "CROSS = รูปตัดทิศทางสั้น (ทิศทางหลักของพื้นทางเดียว), LONG = รูปตัดทิศทางยาว",
+      "L1, L2 วัดจากผิวที่รองรับ: L1 = Ln/4 ที่ขอบไม่ต่อเนื่อง, L2 = Ln/3 ข้างละที่รองรับต่อเนื่อง (ปัดขึ้น 100 mm); พื้นยื่น L2 = ระยะตัดเหล็กเสริมพิเศษ Top 3",
+      "ระยะห่างเหล็กทุกตำแหน่งในแผ่นเดียวกันหารลงตัวกับระยะ Module (300, 250 หรือ 200 mm) เหล็กทุกชุดจึงตรงแนวกันทุกระยะ Module และเหล็กเสริมพิเศษแทรกกึ่งกลางได้พอดี",
+      `ระยะฝังยึดเต็มที่ (Fully developed) Ld ≥ ${ld}d สำหรับ ${grade}: ${lds}`,
       `ระยะทาบเหล็ก: ${laps} (RB ต้องงอขอ)`,
-      "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 0.30 m และต้องไม่น้อยกว่า As,min",
-      "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
-      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว ระยะห่างเหล็กทุกตำแหน่งไม่เกิน 0.30 m",
-      "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
-      "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
+      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ระยะห่างไม่เกิน 300 mm",
+      "ค่าเหล็กเป็นของแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าได้ แต่ไม่เกิน 300 mm",
+      `ช่อง ${NA} = ไม่มีเหล็กตำแหน่งนี้ (ช่องขีดฆ่าในแบบ)`,
     ];
   }
-  const SCHEDULE_COLUMNS = { mark: "พื้น", kind: "ประเภท", t: "หนา (m)", size: "ขนาด (m)", load: "SDL / LL (kg/m²)",
-    short_bot: "ทิศทางสั้น: ล่าง", short_top_cont: "ทิศทางสั้น: บน ขอบต่อเนื่อง", short_top_disc: "ทิศทางสั้น: บน ขอบไม่ต่อเนื่อง",
-    long_bot: "ทิศทางยาว: ล่าง", long_top_cont: "ทิศทางยาว: บน ขอบต่อเนื่อง", long_top_disc: "ทิศทางยาว: บน ขอบไม่ต่อเนื่อง", remark: "หมายเหตุ" };
 
   return { BARS, STEEL_GRADES, CODES, ONE_WAY, CASE_NAMES, concrete, steel, rhoBal, rhoMax, designFlexure, coefficient,
-    crackedI, designOneWay, designTwoWay, oneWayBoq, twoWayBoq,
-    drawingCallout, oneWayRow, twoWayRow, lapLength, scheduleNotes, SCHEDULE_COLUMNS };
+    crackedI, designOneWay, designTwoWay, oneWayBoq, twoWayBoq, moduleSpacings, harmonize,
+    NA, TWO_WAY_TYPES, ONE_WAY_TYPES, CANTILEVER_TYPES, TYPE_LABELS, detailOneWay, detailTwoWay, detailRows,
+    drawingCallout, lapLength, scheduleNotes, scheduleRecords, SCHEDULE_COLUMNS };
 })();
 if (typeof module !== "undefined") module.exports = RC;
 </script>
@@ -575,6 +706,14 @@ if (typeof module !== "undefined") module.exports = RC;
   fill("ow_sup", Object.entries(RC.ONE_WAY).map(([k, s]) => [k, s.label]), "simple");
   const bars = Object.keys(RC.BARS).map((b) => [b, b]);
   fill("ow_bar", bars, "DB12"); fill("tw_bar", bars, "DB12");
+  fill("tw_type", RC.TWO_WAY_TYPES.map((x) => [x, RC.TYPE_LABELS[x]]), "A");
+  function fillOwType() {
+    const list = $("ow_sup").value === "cantilever" ? RC.CANTILEVER_TYPES : RC.ONE_WAY_TYPES;
+    const cur = $("ow_type").value;
+    fill("ow_type", list.map((x) => [x, RC.TYPE_LABELS[x]]), list.includes(cur) ? cur : list[0]);
+  }
+  fillOwType();
+  $("ow_sup").addEventListener("input", fillOwType);
 
   // ---- tabs (bare #token deep links)
   const tabs = ["ow", "tw", "sc", "th"];
@@ -596,7 +735,8 @@ if (typeof module !== "undefined") module.exports = RC;
     $("derived").innerHTML = `<span>U = ${code.dl}D + ${code.ll}L</span><span>φb = ${code.phiB}, φv = ${code.phiV}</span>` +
       `<span>β₁ = ${c.beta1.toFixed(3)}</span><span>Ec = ${fmt(c.Ec, 0)} ksc</span><span>ρtemp = ${s.rhoTemp.toFixed(4)}</span>` +
       `<span>ρmax = ${RC.rhoMax(c, s).toFixed(4)}</span>`;
-    return { code, grade, c, s, cover: val("cover") || 2, waste: (val("waste") || 0) / 100 };
+    const supw = val("supw");
+    return { code, grade, c, s, cover: val("cover") || 2, waste: (val("waste") || 0) / 100, supportW: (Number.isFinite(supw) ? supw : 300) / 1000 };
   }
 
   const metric = (label, value, sub) => `<div class="metric"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
@@ -706,8 +846,11 @@ if (typeof module !== "undefined") module.exports = RC;
     $("ow_P_wrap").hidden = support !== "cantilever";
     const inp = { span: val("ow_L") || 3, h: val("ow_h") || 15, support, sdl: val("ow_sdl") || 0, ll: val("ow_ll") || 0, cover: g.cover,
       mainBar: $("ow_bar").value, pEnd: support === "cantilever" ? (val("ow_P") || 0) : 0, xi: val("ow_xi") };
-    const r = RC.designOneWay(inp, g.c, g.s, g.code), q = RC.oneWayBoq(r, val("ow_W") || 1, g.waste), df = r.deflection;
-    last.ow = () => RC.oneWayRow(markOf("ow"), r, val("ow_W") || 1);
+    const width = val("ow_W") || 1, type = $("ow_type").value;
+    const r = RC.designOneWay(inp, g.c, g.s, g.code), q = RC.oneWayBoq(r, width, g.waste, type, g.supportW), df = r.deflection;
+    const det = RC.detailOneWay(r, width, type, g.supportW);
+    last.ow = () => entryOf(markOf("ow") || "—", det);
+    $("ow-preview").innerHTML = previewHtml(last.ow());
     const md = [
       "# RC Slab Design — พื้นทางเดียว (One-way slab)", "",
       `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
@@ -756,8 +899,11 @@ if (typeof module !== "undefined") module.exports = RC;
     const g = common();
     const inp = { x: val("tw_x") || 4, y: val("tw_y") || 5, h: val("tw_h") || 12, sdl: val("tw_sdl") || 0, ll: val("tw_ll") || 0,
       cover: g.cover, bar: $("tw_bar").value, e1: $("tw_e1").checked, e2: $("tw_e2").checked, e3: $("tw_e3").checked, e4: $("tw_e4").checked };
-    const r = RC.designTwoWay(inp, g.c, g.s, g.code), q = RC.twoWayBoq(r, g.waste);
-    last.tw = () => RC.twoWayRow(markOf("tw"), r);
+    const type = $("tw_type").value;
+    const r = RC.designTwoWay(inp, g.c, g.s, g.code), q = RC.twoWayBoq(r, g.waste, type, g.supportW);
+    const det = RC.detailTwoWay(r, type, g.supportW);
+    last.tw = () => entryOf(markOf("tw") || "—", det);
+    $("tw-preview").innerHTML = previewHtml(last.tw());
     const md = [
       "# RC Slab Design — พื้นสองทาง (Two-way slab, ACI 318-63 Method 2)", "",
       `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
@@ -796,15 +942,33 @@ if (typeof module !== "undefined") module.exports = RC;
     wireCopy("tw-rep");
   }
 
-  // ---- slab schedule, kept in this browser
+  // ---- slab schedule (office layout), kept in this browser
   const last = {};
-  const KEY = "rcslab-schedule";
+  const KEY = "rcslab-schedule-v2";
   let schedule = {};
   try { schedule = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { schedule = {}; }
+  for (const k of Object.keys(schedule)) if (!Array.isArray(schedule[k].records)) delete schedule[k];
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(schedule)); } catch (e) {} };
   const markOf = (k) => $(k + "-mark").value.trim();
   const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
   function nextMark() { let n = 1; while (schedule["S" + n]) n++; return "S" + n; }
+  const entryOf = (mark, det) => ({ mark, records: RC.scheduleRecords(mark, det), ok: det.ok, bars: [det.bar], module: det.module });
+  const COLS = Object.keys(RC.SCHEDULE_COLUMNS);
+  const DATA_COLS = COLS.slice(2);
+
+  function scheduleTable(entries, withDelete) {
+    const head = COLS.map((k) => `<th>${esc(RC.SCHEDULE_COLUMNS[k]).replace(" (", "<br>(").replace(" Reinforcement", "<br>Reinforcement")}</th>`).join("");
+    const body = entries.map((e) => e.records.map((r, i) => {
+      const first = i === 0
+        ? `<td rowspan="${e.records.length}" class="mark">${esc(e.mark)}${e.ok ? "" : " " + pill(false)}${withDelete
+            ? `<br><button class="ghost" type="button" data-del="${esc(e.mark)}" aria-label="ลบ ${esc(e.mark)}">ลบ</button>` : ""}</td>
+           <td rowspan="${e.records.length}">${esc(r.slab_type)}</td>` : "";
+      return `<tr>${first}${DATA_COLS.map((k) => r[k] === RC.NA ? `<td class="na">${RC.NA}</td>` : `<td>${esc(r[k])}</td>`).join("")}</tr>`;
+    }).join("")).join("");
+    return `<div class="tw"><table class="sched"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  const previewHtml = (e) => scheduleTable([e], false) +
+    `<p class="module-note">ระยะ Module ของแผ่นนี้ = ${(e.module * 10).toFixed(0)} mm — ระยะห่างทุกตำแหน่งหาร ${(e.module * 10).toFixed(0)} mm ลงตัว เหล็กทุกชุดจึงตรงแนวกัน</p>`;
 
   function addRow(k) {
     const mark = markOf(k);
@@ -819,14 +983,15 @@ if (typeof module !== "undefined") module.exports = RC;
   $("ow-add").addEventListener("click", () => addRow("ow"));
   $("tw-add").addEventListener("click", () => addRow("tw"));
   $("ow-mark").value = $("tw-mark").value = nextMark();
+  for (const k of ["ow", "tw"]) $(k + "-mark").addEventListener("input", () => { $(k + "-preview").innerHTML = previewHtml(last[k]()); });
 
-  function scheduleRows() { return Object.keys(schedule).sort(natural).map((k) => schedule[k]); }
+  function scheduleEntries() { return Object.keys(schedule).sort(natural).map((k) => schedule[k]); }
   function scheduleText(sep) {
-    const keys = Object.keys(RC.SCHEDULE_COLUMNS), rows = scheduleRows();
     const line = (cells) => sep === "|" ? `| ${cells.join(" | ")} |` : cells.join("\t");
-    const out = [line(keys.map((k) => RC.SCHEDULE_COLUMNS[k]))];
-    if (sep === "|") out.push("|" + "---|".repeat(keys.length));
-    for (const r of rows) out.push(line(keys.map((k) => r[k])));
+    const out = [line(COLS.map((k) => RC.SCHEDULE_COLUMNS[k]))];
+    if (sep === "|") out.push("|" + "---|".repeat(COLS.length));
+    for (const e of scheduleEntries())
+      e.records.forEach((r, i) => out.push(line(COLS.map((k) => (i && (k === "mark" || k === "slab_type")) ? "" : r[k]))));
     return out.join("\n");
   }
   function copyText(text, msgId, okMsg) {
@@ -836,29 +1001,20 @@ if (typeof module !== "undefined") module.exports = RC;
   }
 
   function renderSchedule() {
-    const g = common(), rows = scheduleRows();
-    $("sc-count").textContent = rows.length ? `(${rows.length})` : "";
-    if (!rows.length) {
+    const g = common(), entries = scheduleEntries();
+    $("sc-count").textContent = entries.length ? `(${entries.length})` : "";
+    if (!entries.length) {
       $("out-sc").innerHTML = `<section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule</small></h2>
         <p class="empty">ยังไม่มีรายการ ออกแบบพื้นในแท็บพื้นทางเดียวหรือพื้นสองทาง แล้วกด “เพิ่ม/แทนที่ในตาราง” ด้านล่างผลการคำนวณ</p></section>`;
       return;
     }
-    const bad = rows.filter((r) => !r.ok).map((r) => r.mark);
-    const cell = (v) => `<td class="bar">${esc(v)}</td>`;
-    const notes = RC.scheduleNotes(g.c.fc, g.grade, g.cover, rows.flatMap((r) => r.bars));
+    const bad = entries.filter((e) => !e.ok).map((e) => e.mark);
+    const notes = RC.scheduleNotes(g.c.fc, g.grade, g.cover, entries.flatMap((e) => e.bars));
     $("out-sc").innerHTML = `
       ${bad.length ? `<div class="verdict ng">พื้น ${bad.map(esc).join(", ")} ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ</div>` : ""}
-      <section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule · ${rows.length} รายการ</small></h2>
-        <div class="tw"><table class="sched">
-          <thead>
-            <tr><th rowspan="2">พื้น</th><th rowspan="2">ประเภท</th><th rowspan="2">หนา (m)</th><th rowspan="2">ขนาด (m)</th><th rowspan="2">SDL / LL<br>(kg/m²)</th>
-              <th colspan="3" class="grp">ทิศทางสั้น</th><th colspan="3" class="grp">ทิศทางยาว</th><th rowspan="2">หมายเหตุ</th><th rowspan="2"></th></tr>
-            <tr><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th></tr>
-          </thead><tbody>
-          ${rows.map((r) => `<tr><td>${esc(r.mark)} ${r.ok ? "" : pill(false)}</td><td>${r.kind}</td><td class="n">${r.t}</td><td class="n">${r.size}</td><td class="n">${r.load}</td>
-            ${cell(r.short_bot)}${cell(r.short_top_cont)}${cell(r.short_top_disc)}${cell(r.long_bot)}${cell(r.long_top_cont)}${cell(r.long_top_disc)}
-            <td class="note">${esc(r.remark)}</td><td><button class="ghost" type="button" data-del="${esc(r.mark)}" aria-label="ลบ ${esc(r.mark)}">ลบ</button></td></tr>`).join("")}
-          </tbody></table></div>
+      <section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule · ${entries.length} แผ่น</small></h2>
+        ${scheduleTable(entries, true)}
+        <p class="module-note">ระยะ Module: ${entries.map((e) => `${esc(e.mark)} = ${(e.module * 10).toFixed(0)} mm`).join(", ")}</p>
         <div class="actions">
           <button class="btn" type="button" id="sc-copy-xl">คัดลอกไปวางใน Excel</button>
           <button class="btn" type="button" id="sc-copy-md">คัดลอกเป็น Markdown</button>
