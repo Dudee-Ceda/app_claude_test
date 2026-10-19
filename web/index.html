@@ -586,6 +586,7 @@ if (typeof module !== "undefined") module.exports = RC;
   let start = location.hash.slice(1);
   if (!tabs.includes(start)) { try { start = localStorage.getItem("rcslab-tab") || "ow"; } catch (e) { start = "ow"; } }
   show(tabs.includes(start) ? start : "ow");
+  window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (tabs.includes(h)) show(h); });
 
   function common() {
     const code = RC.CODES[$("code").value];

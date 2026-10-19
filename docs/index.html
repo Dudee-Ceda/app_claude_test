@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="RC Slab Design — โปรแกรมออกแบบพื้นคอนกรีตเสริมเหล็ก ทางเดียวและสองทาง (ACI / ว.ส.ท., Method 2) ตรวจการแอ่นตัว ถอดปริมาณวัสดุ และตารางเหล็กพื้นสำหรับทำแบบ">
+<meta property="og:title" content="RC Slab Design">
+<meta property="og:description" content="RC Slab Design — โปรแกรมออกแบบพื้นคอนกรีตเสริมเหล็ก ทางเดียวและสองทาง (ACI / ว.ส.ท., Method 2) ตรวจการแอ่นตัว ถอดปริมาณวัสดุ และตารางเหล็กพื้นสำหรับทำแบบ">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b5c8a'/%3E%3Cpath d='M6 10h20M6 16h20M6 22h20M10 6v20M16 6v20M22 6v20' stroke='%23fbfbf8' stroke-width='2'/%3E%3C/svg%3E">
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+<title>RC Slab Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: drafting-table tool — slim title strip, material bar, then inputs (left) beside calculation sheet (right); stacks on phones. */
+:root {
+  --bg: #eef0ec;          /* cured-concrete grey, slight green bias */
+  --sheet: #fbfbf8;       /* calculation sheet */
+  --fg: #1d2421;
+  --muted: #5d6762;
+  --line: #d3d8d2;
+  --accent: #2b5c8a;      /* rebar / blueprint blue */
+  --accent-soft: #dfe8f1;
+  --ok: #23774a;
+  --ok-soft: #dcefe3;
+  --ng: #b3362c;
+  --ng-soft: #f6dedb;
+  --warn-soft: #f3ecd6;
+  --steel-x: #2b5c8a;
+  --steel-y: #1f7a5c;
+  --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141816; --sheet: #1b201e; --fg: #e3e8e4; --muted: #9aa49f; --line: #2f3633;
+    --accent: #7fb0e0; --accent-soft: #1f3142; --ok: #6cc795; --ok-soft: #1a3326;
+    --ng: #f08a80; --ng-soft: #3d201d; --warn-soft: #36301c; --steel-x: #7fb0e0; --steel-y: #66c3a2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141816; --sheet: #1b201e; --fg: #e3e8e4; --muted: #9aa49f; --line: #2f3633;
+  --accent: #7fb0e0; --accent-soft: #1f3142; --ok: #6cc795; --ok-soft: #1a3326;
+  --ng: #f08a80; --ng-soft: #3d201d; --warn-soft: #36301c; --steel-x: #7fb0e0; --steel-y: #66c3a2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.25; }
+.num, td.n, .metric b, input[type=number] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; border-bottom: 2px solid var(--fg); padding-bottom: 10px; }
+header.top h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+.matbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; background: var(--sheet); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.matbar .derived { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); font-family: var(--font-mono); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+
+label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--muted); font-weight: 500; min-width: 0; }
+label.f input, label.f select {
+  font: inherit; font-size: 14.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 5px; padding: 6px 8px; width: 100%; min-width: 0;
+}
+label.f input:focus-visible, label.f select:focus-visible, button:focus-visible, .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+label.chk { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+label.chk input { width: 17px; height: 17px; accent-color: var(--accent); }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+
+.panel { display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .panel { grid-template-columns: minmax(0, 1fr); } }
+.inputs { display: flex; flex-direction: column; gap: 14px; background: var(--sheet); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.inputs h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); font-weight: 700; }
+.inputs fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.inputs fieldset + fieldset { border-top: 1px dashed var(--line); padding-top: 12px; }
+
+.sheet { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.verdict { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--r); font-weight: 600; }
+.verdict.ok { background: var(--ok-soft); color: var(--ok); }
+.verdict.ng { background: var(--ng-soft); color: var(--ng); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--r); background: var(--sheet); overflow: hidden; }
+.metric { padding: 10px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0 -1px -1px 0; }
+.metric span { font-size: 12px; color: var(--muted); }
+.metric b { font-size: 19px; font-weight: 500; }
+.metric small { font-size: 12px; color: var(--muted); }
+
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; font-family: var(--font-body); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.ng { background: var(--ng-soft); color: var(--ng); }
+
+section.block { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+section.block h2 { font-size: 17px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+section.block h2 small { font-size: 13px; color: var(--muted); font-weight: 400; font-family: var(--font-mono); }
+.tw { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+td.n { text-align: right; white-space: nowrap; }
+td.bar { font-family: var(--font-mono); font-weight: 500; color: var(--accent); white-space: nowrap; }
+td.note { color: var(--muted); font-size: 12.5px; min-width: 160px; }
+td:first-child { min-width: 120px; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1050px) { .split { grid-template-columns: minmax(0, 1fr); } }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--font-mono); fill: var(--muted); font-size: 11px; }
+.notes { margin: 0; padding-left: 18px; color: var(--fg); font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; }
+.notes li::marker { color: var(--accent); }
+.note-box { background: var(--warn-soft); border-radius: var(--r); padding: 10px 14px; font-size: 13.5px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button.btn { font: inherit; font-size: 14px; font-weight: 600; background: var(--accent); color: var(--sheet); border: 0; border-radius: 5px; padding: 8px 14px; cursor: pointer; }
+button.btn:hover { filter: brightness(1.08); }
+.actions span { font-size: 13px; color: var(--muted); }
+textarea.report { width: 100%; min-height: 220px; font-family: var(--font-mono); font-size: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 8px; }
+.theory { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; max-width: 900px; display: flex; flex-direction: column; gap: 10px; }
+.theory h2 { font-size: 18px; margin-top: 8px; }
+.theory p, .theory li { max-width: 72ch; }
+.theory code { font-family: var(--font-mono); font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.addrow .actions { align-items: flex-end; }
+.addrow label.f { width: 140px; }
+.tabs .count { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+table.sched th { white-space: normal; vertical-align: bottom; min-width: 86px; }
+table.sched th.grp { text-align: center; border-bottom: 1px solid var(--muted); color: var(--fg); }
+table.sched td { white-space: nowrap; }
+table.sched td.bar { color: var(--fg); }
+table.sched td.note { white-space: normal; min-width: 200px; }
+table.sched td:first-child { min-width: 0; font-weight: 700; }
+button.ghost { font: inherit; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+button.ghost:hover { color: var(--ng); border-color: var(--ng); }
+button.ghost.armed { color: var(--sheet); background: var(--ng); border-color: var(--ng); }
+ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+.empty { color: var(--muted); padding: 18px 4px; }
+.hint { font-size: 12px; color: var(--muted); margin-top: -4px; }
+.disclaimer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+@media (prefers-reduced-motion: no-preference) { .verdict, .metric b { transition: color .2s, background .2s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>RC <span>Slab</span> Design</h1>
+    <p>ออกแบบพื้นคอนกรีตเสริมเหล็ก · วิธีกำลัง (SDM) · หน่วย kg, cm, m, ksc</p>
+  </header>
+
+  <div class="matbar" id="matbar">
+    <label class="f">มาตรฐาน / Load combination
+      <select id="code"></select></label>
+    <label class="f">f'c คอนกรีต (ksc)
+      <input id="fc" type="number" min="150" max="500" step="10" value="240"></label>
+    <label class="f">ชั้นคุณภาพเหล็ก
+      <select id="grade"></select></label>
+    <label class="f">หน่วยน้ำหนักคอนกรีต (kg/m³)
+      <input id="gamma" type="number" min="2200" max="2600" step="50" value="2400"></label>
+    <label class="f">ระยะหุ้มคอนกรีต (cm)
+      <input id="cover" type="number" min="1.5" max="5" step="0.5" value="2"></label>
+    <label class="f">เผื่อระยะทาบ/เศษเหล็ก (%)
+      <input id="waste" type="number" min="0" max="30" step="1" value="7"></label>
+    <div class="derived" id="derived"></div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-ow" aria-selected="true" data-tab="ow">พื้นทางเดียว (One-way)</button>
+    <button role="tab" id="tab-tw" aria-selected="false" data-tab="tw">พื้นสองทาง (Two-way)</button>
+    <button role="tab" id="tab-sc" aria-selected="false" data-tab="sc">ตารางเหล็กพื้น <span class="count" id="sc-count"></span></button>
+    <button role="tab" id="tab-th" aria-selected="false" data-tab="th">ทฤษฎี / อ้างอิง</button>
+  </nav>
+
+  <!-- ONE-WAY -->
+  <div class="panel" id="pane-ow">
+    <form class="inputs" id="form-ow" onsubmit="return false">
+      <fieldset><h3>รูปทรง</h3>
+        <label class="f">เงื่อนไขการรองรับ <select id="ow_sup"></select></label>
+        <label class="f">ช่วงพื้น L (m) <input id="ow_L" type="number" min="0.5" max="10" step="0.1" value="3"></label>
+        <label class="f">ความหนาพื้น h (cm) <input id="ow_h" type="number" min="8" max="50" step="1" value="15"></label>
+        <label class="f">ความกว้างแผ่นพื้น สำหรับ BOQ (m) <input id="ow_W" type="number" min="0.5" max="30" step="0.1" value="4"></label>
+      </fieldset>
+      <fieldset><h3>น้ำหนักบรรทุก</h3>
+        <label class="f">SDL วัสดุปูผิว/ฝ้า/งานระบบ (kg/m²) <input id="ow_sdl" type="number" min="0" max="2000" step="10" value="100"></label>
+        <label class="f">LL น้ำหนักจร (kg/m²) <input id="ow_ll" type="number" min="0" max="2000" step="10" value="200"></label>
+        <label class="f" id="ow_P_wrap" hidden>น้ำหนักแนวเส้นที่ปลายพื้นยื่น P (kg/m, DL) <input id="ow_P" type="number" min="0" max="3000" step="10" value="0"></label>
+        <label class="f">ระยะเวลาน้ำหนักค้าง (ξ)
+          <select id="ow_xi"><option value="2">≥ 5 ปี (ξ = 2.0)</option><option value="1.4">12 เดือน (ξ = 1.4)</option><option value="1.2">6 เดือน (ξ = 1.2)</option><option value="1">3 เดือน (ξ = 1.0)</option></select></label>
+      </fieldset>
+      <fieldset><h3>เหล็กเสริม</h3>
+        <label class="f">ขนาดเหล็กเสริม <select id="ow_bar"></select></label>
+        <small class="hint">ใช้ขนาดเดียวทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว</small>
+      </fieldset>
+    </form>
+    <div class="sheet"><div class="sheet" id="out-ow"></div>
+      <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
+        <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="ow-mark" type="text" value="S1" maxlength="12"></label>
+          <button class="btn" type="button" id="ow-add">เพิ่ม/แทนที่ในตาราง</button><span id="ow-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
+  </div>
+
+  <!-- TWO-WAY -->
+  <div class="panel" id="pane-tw" hidden>
+    <form class="inputs" id="form-tw" onsubmit="return false">
+      <fieldset><h3>รูปทรง</h3>
+        <label class="f">ช่วงพื้นแนว X (m) <input id="tw_x" type="number" min="1" max="12" step="0.1" value="4"></label>
+        <label class="f">ช่วงพื้นแนว Y (m) <input id="tw_y" type="number" min="1" max="12" step="0.1" value="5"></label>
+        <label class="f">ความหนาพื้น h (cm) <input id="tw_h" type="number" min="8" max="50" step="1" value="12"></label>
+      </fieldset>
+      <fieldset><h3>น้ำหนักบรรทุก</h3>
+        <label class="f">SDL (kg/m²) <input id="tw_sdl" type="number" min="0" max="2000" step="10" value="100"></label>
+        <label class="f">LL (kg/m²) <input id="tw_ll" type="number" min="0" max="2000" step="10" value="200"></label>
+        <label class="f">ขนาดเหล็กเสริม <select id="tw_bar"></select></label>
+        <small class="hint">ใช้ขนาดเดียวทั้งแผ่น</small>
+      </fieldset>
+      <fieldset><h3>ขอบที่ต่อเนื่อง</h3>
+        <label class="chk"><input id="tw_e1" type="checkbox" checked> ขอบ 1 · ซ้าย (ยาวตามแนว Y)</label>
+        <label class="chk"><input id="tw_e2" type="checkbox" checked> ขอบ 2 · ขวา (ยาวตามแนว Y)</label>
+        <label class="chk"><input id="tw_e3" type="checkbox" checked> ขอบ 3 · ล่าง (ยาวตามแนว X)</label>
+        <label class="chk"><input id="tw_e4" type="checkbox" checked> ขอบ 4 · บน (ยาวตามแนว X)</label>
+      </fieldset>
+    </form>
+    <div class="sheet"><div class="sheet" id="out-tw"></div>
+      <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
+        <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="tw-mark" type="text" value="S1" maxlength="12"></label>
+          <button class="btn" type="button" id="tw-add">เพิ่ม/แทนที่ในตาราง</button><span id="tw-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div id="pane-sc" hidden>
+    <div class="sheet" id="out-sc"></div>
+  </div>
+
+  <!-- THEORY -->
+  <div id="pane-th" hidden>
+    <article class="theory">
+      <h2>หลักการออกแบบ (Strength Design Method)</h2>
+      <ul>
+        <li>น้ำหนักบรรทุกประลัย <code>wu = αD(SW + SDL) + αL·LL</code> คิดต่อแถบกว้าง 1 m</li>
+        <li><code>Rn = Mu / (φ b d²)</code>, <code>ρ = 0.85f'c/fy · [1 − √(1 − 2Rn/0.85f'c)]</code></li>
+        <li><code>As,min = ρtemp·b·h</code>: 0.0020 (SR24, SD30), 0.0018 (SD40), 0.0018×4000/fy ≥ 0.0014 (fy &gt; 4000)</li>
+        <li><code>ρ ≤ 0.75ρb</code>, <code>ρb = 0.85β₁f'c/fy · 6120/(6120 + fy)</code></li>
+        <li>ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 30 cm (ข้อกำหนดสำนักงาน; ACI ยอมให้ถึง 45 cm) ปัดลงทีละ 2.5 cm</li>
+        <li>แรงเฉือน <code>φVc = φ·0.53√f'c·b·d</code></li>
+      </ul>
+      <h2>พื้นทางเดียว: สัมประสิทธิ์ ACI</h2>
+      <div class="tw"><table>
+        <thead><tr><th>เงื่อนไข</th><th>h,min</th><th>+M</th><th>−M</th></tr></thead>
+        <tbody>
+          <tr><td>ช่วงเดียว</td><td>L/20</td><td>wL²/8</td><td>wL²/24 ที่ขอบ (เหล็กบนควบคุมรอยร้าว)</td></tr>
+          <tr><td>ต่อเนื่องปลายเดียว (&gt; 2 ช่วง)</td><td>L/24</td><td>wL²/11</td><td>wL²/10 ภายใน, wL²/24 ริม</td></tr>
+          <tr><td>ต่อเนื่องปลายเดียว (2 ช่วง)</td><td>L/24</td><td>wL²/11</td><td>wL²/9 ภายใน, wL²/24 ริม</td></tr>
+          <tr><td>ต่อเนื่องสองปลาย</td><td>L/28</td><td>wL²/16</td><td>wL²/11</td></tr>
+          <tr><td>พื้นยื่น</td><td>L/10</td><td>—</td><td>wL²/2 + P·L</td></tr>
+        </tbody></table></div>
+      <p>h,min คูณด้วย (0.4 + fy/7000) เมื่อ fy มีหน่วย ksc</p>
+      <h2>การแอ่นตัว (พื้นทางเดียว)</h2>
+      <ul>
+        <li><code>Ie = (Mcr/Ma)³Ig + [1 − (Mcr/Ma)³]Icr ≤ Ig</code>, <code>Mcr = fr·Ig/yt</code>, <code>fr = 2√f'c</code></li>
+        <li><code>Δ = wL⁴/(k·Ec·Ie)</code>; k = 384/5 ช่วงเดียว, 185 ต่อเนื่องปลายเดียว, 384 ต่อเนื่องสองปลาย, 8 พื้นยื่น (+ PL³/3EI)</li>
+        <li><code>λ = ξ/(1 + 50ρ')</code>; ตรวจ ΔL ≤ L/360 และ λΔD + ΔL ≤ L/240 (พื้นยื่นใช้ 2L)</li>
+        <li>ถ้า h &lt; h,min แต่การแอ่นตัวผ่านเกณฑ์ ถือว่าใช้ได้ (ACI 9.5.2)</li>
+      </ul>
+      <h2>พื้นสองทาง: ACI 318-63 Method 2</h2>
+      <ul>
+        <li><code>m = S/L ≥ 0.5</code>, <code>M = C·wu·S²</code> (แถบกลาง); แถบเสาใช้ 2/3 ของแถบกลาง</li>
+        <li>C ตาม Case 1–5 (จำนวนขอบไม่ต่อเนื่อง) เทียบบัญญัติไตรยางศ์ตาม m; ช่วงยาวใช้ C ที่ m = 1.0</li>
+        <li>ความหนาต่ำสุด ≥ เส้นรอบรูป/180 และ ≥ 9 cm; เหล็กช่วงยาววางชั้นใน <code>dL = dS − db</code></li>
+        <li>น้ำหนักลงคาน: ด้านสั้น <code>wS/3</code>, ด้านยาว <code>wS/3 · (3 − m²)/2</code></li>
+      </ul>
+      <h2>ปริมาณวัสดุ (BOQ)</h2>
+      <ul>
+        <li>เหล็กล่างยาวเต็มช่วง + ฝัง 0.10 m แต่ละปลาย; เหล็กบนยื่น 0.3 × ช่วง (สองทาง: 0.3S) + 0.15 m</li>
+        <li>เหล็กบนพื้นยื่นยาว 2L; น้ำหนักเหล็ก 0.785 kg/m ต่อพื้นที่ 1 cm²</li>
+      </ul>
+      <p class="disclaimer">โปรแกรมนี้เป็นเครื่องมือช่วยคำนวณเบื้องต้น ผลลัพธ์ต้องได้รับการตรวจสอบและรับรองโดยวิศวกรโยธาผู้มีใบอนุญาต</p>
+    </article>
+  </div>
+</div>
+
+<script data-engine>
+/* RC Slab Design calculation engine — mirrors the Python package rcslab/ (units: kg, cm, ksc). */
+const RC = (() => {
+  const BARS = { RB6: [0.6, 0.283], RB9: [0.9, 0.636], DB10: [1.0, 0.785], DB12: [1.2, 1.131], DB16: [1.6, 2.011], DB20: [2.0, 3.142] };
+  const STEEL_GRADES = { SR24: 2400, SD30: 3000, SD40: 4000, SD50: 5000 };
+  const CODES = {
+    eit: { name: "EIT / ACI 318-99 (1.4D + 1.7L)", dl: 1.4, ll: 1.7, phiB: 0.9, phiV: 0.85 },
+    aci19: { name: "ACI 318-19 (1.2D + 1.6L)", dl: 1.2, ll: 1.6, phiB: 0.9, phiV: 0.75 },
+  };
+  const B = 100, STEP = 2.5, ES = 2.04e6;
+  const S_LIMIT = 30; // office detailing limit on any slab bar spacing, cm (code allows up to 45)
+
+  const concrete = (fc, uw = 2400) => ({
+    fc, uw,
+    beta1: fc <= 280 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc - 280) / 70),
+    Ec: 15100 * Math.sqrt(fc),
+  });
+  const steel = (fy) => ({
+    fy, Es: ES,
+    rhoTemp: fy <= 3500 ? 0.002 : fy <= 4000 ? 0.0018 : Math.max(0.0014, 0.0018 * 4000 / fy),
+  });
+  const rhoBal = (c, s) => 0.85 * c.beta1 * c.fc / s.fy * 6120 / (6120 + s.fy);
+  const rhoMax = (c, s) => 0.75 * rhoBal(c, s);
+
+  function designFlexure(label, Mu, d, h, bar, sMax, c, s, code) {
+    Mu = Math.abs(Mu);
+    const Rn = Mu * 100 / (code.phiB * B * d * d);
+    const k = 1 - 2 * Rn / (0.85 * c.fc);
+    const rho = k < 0 ? NaN : 0.85 * c.fc / s.fy * (1 - Math.sqrt(k));
+    const AsMin = s.rhoTemp * B * h;
+    const notes = [];
+    let ok = true, AsReq, AsDesign;
+    if (Number.isNaN(rho)) {
+      ok = false; AsReq = NaN; AsDesign = AsMin;
+      notes.push("หน้าตัดรับโมเมนต์ไม่พอ — เพิ่มความหนาพื้น");
+    } else {
+      AsReq = rho * B * d;
+      if (rho > rhoMax(c, s)) { ok = false; notes.push("ρ > ρmax — เพิ่มความหนาพื้น"); }
+      AsDesign = Math.max(AsReq, AsMin);
+      if (AsMin > AsReq) notes.push("ใช้ As,min (temperature & shrinkage)");
+    }
+    const area = BARS[bar][1];
+    let sp = AsDesign > 0 ? B * area / AsDesign : sMax;
+    sp = Math.floor(sp / STEP + 1e-9) * STEP;
+    sp = Math.max(STEP, Math.min(sp, sMax));
+    const AsProv = B * area / sp;
+    const a = AsProv * s.fy / (0.85 * c.fc * B);
+    const phiMn = code.phiB * AsProv * s.fy * (d - a / 2) / 100;
+    if (AsProv < AsDesign - 1e-9) { ok = false; notes.push(`${bar} ที่ระยะ ${STEP} cm ยังไม่พอ — เพิ่มขนาดเหล็ก`); }
+    if (phiMn < Mu - 1e-6) ok = false;
+    return { label, Mu, d, Rn, rho, AsReq, AsMin, AsDesign, bar, spacing: sp, AsProv, phiMn, ok, note: notes.join("; "),
+      callout: `${bar} @ ${(sp / 100).toFixed(3)} m` };
+  }
+  function checkShear(Vu, d, c, code) {
+    const phiVc = code.phiV * 0.53 * Math.sqrt(c.fc) * B * d;
+    return { Vu, phiVc, d, ok: Vu <= phiVc, ratio: Vu / phiVc };
+  }
+
+  // ---------------- deflection
+  const DEF_K = { simple: 384 / 5, one_end: 185, both_ends: 384, cantilever: 8 };
+  function crackedI(As, d, n) {
+    const nAs = n * As;
+    const x = (-nAs + Math.sqrt(nAs * nAs + 2 * B * nAs * d)) / B;
+    return B * x ** 3 / 3 + nAs * (d - x) ** 2;
+  }
+  function effectiveI(Ma, Mcr, Ig, Icr) {
+    if (Ma <= Mcr) return Ig;
+    const r = (Mcr / Ma) ** 3;
+    return Math.min(Ig, r * Ig + (1 - r) * Icr);
+  }
+  function oneWayDeflection(sup, spanM, h, d, As, wD, wL, P, mDiv, c, s, xi) {
+    const L = spanM * 100, Ec = c.Ec, n = s.Es / Ec, Ig = B * h ** 3 / 12;
+    const Icr = crackedI(As, d, n), fr = 2 * Math.sqrt(c.fc), Mcr = fr * Ig / (h / 2);
+    const cant = sup === "cantilever";
+    const moment = (w, p) => w / 100 * L * L / mDiv + (cant ? p * L : 0);
+    const defl = (w, p, Ie) => w / 100 * L ** 4 / (DEF_K[sup] * Ec * Ie) + (cant ? p * L ** 3 / (3 * Ec * Ie) : 0);
+    const MaD = moment(wD, P), MaDL = moment(wD + wL, P);
+    const IeD = effectiveI(MaD, Mcr, Ig, Icr), IeDL = effectiveI(MaDL, Mcr, Ig, Icr);
+    const dD = defl(wD, P, IeD), dDL = defl(wD + wL, P, IeDL), dL = dDL - dD;
+    const lam = xi / (1 + 50 * 0);
+    const Leq = cant ? 2 * L : L;
+    const r = { L, Ec, n, Ig, Icr, fr, Mcr, MaD, MaDL, IeD, IeDL, dD, dDL, dL, lam, dLong: lam * dD + dL, limL: Leq / 360, limLong: Leq / 240 };
+    r.okL = r.dL <= r.limL; r.okLong = r.dLong <= r.limLong; r.ok = r.okL && r.okLong;
+    return r;
+  }
+
+  // ---------------- one-way
+  const ONE_WAY = {
+    // simple span: +M = wL²/8 unchanged; top bars at both ends for -M = wL²/24 (edge cast with the beam)
+    simple: { label: "ช่วงเดียว วางบนที่รองรับธรรมดา", hDiv: 20, pos: 8, negCont: 0, negDisc: 24, shear: 1.0, nCont: 0, nDisc: 2 },
+    one_end: { label: "ต่อเนื่องปลายเดียว — ช่วงริม, มากกว่า 2 ช่วง", hDiv: 24, pos: 11, negCont: 10, negDisc: 24, shear: 1.15, nCont: 1, nDisc: 1 },
+    one_end_2: { label: "ต่อเนื่องปลายเดียว — 2 ช่วง", hDiv: 24, pos: 11, negCont: 9, negDisc: 24, shear: 1.15, nCont: 1, nDisc: 1 },
+    both_ends: { label: "ต่อเนื่องสองปลาย", hDiv: 28, pos: 16, negCont: 11, negDisc: 0, shear: 1.0, nCont: 2, nDisc: 0 },
+    cantilever: { label: "พื้นยื่น (Cantilever)", hDiv: 10, pos: 0, negCont: 2, negDisc: 0, shear: 2.0, nCont: 1, nDisc: 0 },
+  };
+  function designOneWay(inp, c, s, code) {
+    const sup = ONE_WAY[inp.support], L = inp.span;
+    const cant = inp.support === "cantilever";
+    const sw = c.uw * inp.h / 100, wd = sw + inp.sdl, wu = code.dl * wd + code.ll * inp.ll;
+    const hMin = L * 100 / sup.hDiv * (0.4 + s.fy / 7000), hOk = inp.h >= hMin - 1e-9;
+    const d = inp.h - inp.cover - BARS[inp.mainBar][0] / 2;
+    const sMax = Math.min(3 * inp.h, S_LIMIT), sTemp = Math.min(5 * inp.h, S_LIMIT);
+    const pu = cant ? code.dl * inp.pEnd : 0;
+    const moments = [];
+    if (sup.pos) moments.push(["+M กลางช่วง", wu * L * L / sup.pos]);
+    if (sup.negCont) moments.push([cant ? "-M ที่ยึดแน่น" : "-M ที่รองรับต่อเนื่อง", wu * L * L / sup.negCont + pu * L]);
+    if (sup.negDisc) moments.push(["-M ที่รองรับไม่ต่อเนื่อง", wu * L * L / sup.negDisc]);
+    const flexure = moments.map(([k, m]) => designFlexure(k, m, d, inp.h, inp.mainBar, sMax, c, s, code));
+    const temp = designFlexure("เหล็กกันร้าว (Temp.)", 0, d, inp.h, inp.mainBar, sTemp, c, s, code);
+    const shear = checkShear(sup.shear * wu * L / 2 + pu, d, c, code);
+    const crit = flexure[0];
+    const deflection = oneWayDeflection(inp.support === "one_end_2" ? "one_end" : inp.support, L, inp.h, d, crit.AsProv,
+      wd, inp.ll, cant ? inp.pEnd : 0, cant ? sup.negCont : sup.pos, c, s, inp.xi);
+    const notes = [];
+    if (!hOk) notes.push(`ความหนาน้อยกว่า h,min = ${hMin.toFixed(1)} cm (ACI 318 Table 9.5a) — ` +
+      (deflection.ok ? "การแอ่นตัวอยู่ในเกณฑ์ จึงใช้ได้" : "การแอ่นตัวเกินเกณฑ์ — เพิ่มความหนา"));
+    if (!shear.ok) notes.push("กำลังรับแรงเฉือนไม่พอ — เพิ่มความหนาพื้น");
+    if (!deflection.ok) notes.push("การแอ่นตัวเกินเกณฑ์ L/360 หรือ L/240");
+    if (inp.support === "simple") notes.push("ที่รองรับไม่ต่อเนื่องใส่เหล็กบนรับ −M = wL²/24 (ขอบหล่อติดคาน) เพื่อควบคุมรอยร้าว");
+    if (cant) notes.push("พื้นยื่น: เกณฑ์การแอ่นตัวเทียบกับช่วงเทียบเท่า 2L; เหล็กหลักอยู่บน ต้องยึดฝังเข้าช่วงในอย่างน้อย L");
+    const ok = (hOk || deflection.ok) && shear.ok && flexure.every(f => f.ok) && temp.ok;
+    return { inp, sup, sw, wd, wu, pu, hMin, hOk, d, moments, flexure, temp, shear, deflection, notes, ok };
+  }
+
+  // ---------------- two-way (ACI 318-63 Method 2)
+  const M_RATIOS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5];
+  const CASES = {
+    1: { negCont: [0.033, 0.040, 0.048, 0.055, 0.063, 0.083], negDisc: null, pos: [0.025, 0.030, 0.036, 0.041, 0.047, 0.062] },
+    2: { negCont: [0.041, 0.048, 0.055, 0.062, 0.069, 0.085], negDisc: [0.021, 0.024, 0.027, 0.031, 0.035, 0.042], pos: [0.031, 0.036, 0.041, 0.047, 0.052, 0.064] },
+    3: { negCont: [0.049, 0.057, 0.064, 0.071, 0.078, 0.090], negDisc: [0.025, 0.028, 0.032, 0.036, 0.039, 0.045], pos: [0.037, 0.043, 0.048, 0.054, 0.059, 0.068] },
+    4: { negCont: [0.058, 0.066, 0.074, 0.082, 0.090, 0.098], negDisc: [0.029, 0.033, 0.037, 0.041, 0.045, 0.049], pos: [0.044, 0.050, 0.056, 0.062, 0.068, 0.074] },
+    5: { negCont: null, negDisc: [0.033, 0.038, 0.043, 0.047, 0.053, 0.055], pos: [0.050, 0.057, 0.064, 0.072, 0.080, 0.083] },
+  };
+  const CASE_NAMES = {
+    1: "Case 1 — แผ่นพื้นภายใน (ต่อเนื่องทั้ง 4 ด้าน)", 2: "Case 2 — ไม่ต่อเนื่อง 1 ด้าน", 3: "Case 3 — ไม่ต่อเนื่อง 2 ด้าน",
+    4: "Case 4 — ไม่ต่อเนื่อง 3 ด้าน", 5: "Case 5 — ไม่ต่อเนื่องทั้ง 4 ด้าน",
+  };
+  function coefficient(cs, kind, m, dir) {
+    const v = CASES[cs][kind];
+    if (!v) return 0;
+    if (dir === "long") return v[0];
+    m = Math.min(Math.max(m, 0.5), 1.0);
+    for (let i = 0; i < M_RATIOS.length - 1; i++) {
+      const a = M_RATIOS[i], b = M_RATIOS[i + 1];
+      if (m <= a + 1e-12 && m >= b - 1e-12) return v[i] + (v[i + 1] - v[i]) * (a - m) / (a - b);
+    }
+    return v[v.length - 1];
+  }
+  function designTwoWay(inp, c, s, code) {
+    // inp.x, inp.y spans as entered; e1,e2 = edges of length Y; e3,e4 = edges of length X
+    const swapped = inp.x > inp.y;
+    const S = Math.min(inp.x, inp.y), L = Math.max(inp.x, inp.y), m = S / L;
+    const longEdges = swapped ? [inp.e3, inp.e4] : [inp.e1, inp.e2];
+    const shortEdges = swapped ? [inp.e1, inp.e2] : [inp.e3, inp.e4];
+    const cs = 4 - [inp.e1, inp.e2, inp.e3, inp.e4].filter(Boolean).length + 1;
+    const sw = c.uw * inp.h / 100, wd = sw + inp.sdl, wu = code.dl * wd + code.ll * inp.ll;
+    const hMin = Math.max(2 * (S + L) * 100 / 180, 9), hOk = inp.h >= hMin - 1e-9;
+    const db = BARS[inp.bar][0], dS = inp.h - inp.cover - db / 2, dL = dS - db;
+    const sMax = Math.min(3 * inp.h, S_LIMIT);
+    const rows = [];
+    const add = (key, kind, dir) => { const C = coefficient(cs, kind, m, dir); rows.push({ key, kind, dir, C, Mu: C * wu * S * S }); };
+    add("S: +M กลางช่วง", "pos", "short");
+    if (longEdges.some(Boolean)) add("S: -M ขอบต่อเนื่อง", "negCont", "short");
+    if (!longEdges.every(Boolean)) add("S: -M ขอบไม่ต่อเนื่อง", "negDisc", "short");
+    add("L: +M กลางช่วง", "pos", "long");
+    if (shortEdges.some(Boolean)) add("L: -M ขอบต่อเนื่อง", "negCont", "long");
+    if (!shortEdges.every(Boolean)) add("L: -M ขอบไม่ต่อเนื่อง", "negDisc", "long");
+    const fShort = [], fLong = [];
+    for (const r of rows) {
+      const f = designFlexure(r.key, r.Mu, r.dir === "short" ? dS : dL, inp.h, inp.bar, sMax, c, s, code);
+      f.C = r.C; f.kind = r.kind;
+      (r.dir === "short" ? fShort : fLong).push(f);
+    }
+    const beamShort = wu * S / 3, beamLong = wu * S / 3 * (3 - m * m) / 2;
+    const shear = checkShear(Math.max(beamShort, beamLong), dS, c, code);
+    const notes = [];
+    if (m < 0.5) notes.push(`m = S/L = ${m.toFixed(2)} < 0.5 — ควรออกแบบเป็นพื้นทางเดียว (One-way slab)`);
+    if (!hOk) notes.push(`ความหนาน้อยกว่า h,min = ${hMin.toFixed(1)} cm (เส้นรอบรูป/180, ≥ 9 cm)`);
+    if (!shear.ok) notes.push("กำลังรับแรงเฉือนไม่พอ — เพิ่มความหนาพื้น");
+    notes.push("ค่าที่ได้เป็นของแถบกลาง (Middle strip); แถบเสา (Column strip) ใช้ 2/3 ของค่าแถบกลางได้");
+    notes.push("ถ้าโมเมนต์ลบสองข้างของคานไม่เท่ากัน ให้ใช้ค่าที่มากกว่า หรือกระจายโมเมนต์ส่วนต่างตามสติฟเนส");
+    const isTwoWay = m >= 0.5;
+    const ok = isTwoWay && hOk && shear.ok && [...fShort, ...fLong].every(f => f.ok);
+    return { inp, swapped, S, L, m, cs, sw, wd, wu, hMin, hOk, dS, dL, fShort, fLong, shear, beamShort, beamLong, notes, isTwoWay, ok };
+  }
+
+  // ---------------- BOQ
+  const DENS = 0.785, EMBED = 0.10, ANCHOR = 0.15, TOP_EXT = 0.30;
+  const countBars = (w, sp) => Math.floor(w * 100 / sp + 1e-9) + 1;
+  const item = (desc, f, run, len, sides = 1) => {
+    const count = sides * countBars(run, f.spacing), total = count * len;
+    return { desc, bar: f.bar, spacing: f.spacing, count, length: len, total, weight: total * BARS[f.bar][1] * DENS };
+  };
+  function summarize(area, h, waste, items) {
+    const net = items.reduce((a, i) => a + i.weight, 0), total = net * (1 + waste), conc = area * h / 100;
+    const byBar = {};
+    for (const i of items) byBar[i.bar] = (byBar[i.bar] || 0) + i.weight * (1 + waste);
+    return { area, h, waste, items, concrete: conc, formwork: area, net, total, byBar, ratio: conc ? total / conc : 0 };
+  }
+  function oneWayBoq(r, width, waste) {
+    const L = r.inp.span, items = [], by = Object.fromEntries(r.flexure.map(f => [f.label, f])), temp = r.temp, sup = r.sup;
+    if (r.inp.support === "cantilever") {
+      items.push(item("เหล็กบน (หลัก) พื้นยื่น", by["-M ที่ยึดแน่น"], width, 2 * L));
+      items.push(item("เหล็กกันร้าวบน (ใต้เหล็กหลัก)", temp, 2 * L, width));
+      items.push(item("เหล็กล่างทิศทางสั้น (กันร้าว)", temp, width, L + EMBED));
+      items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
+      return summarize(L * width, r.inp.h, waste, items);
+    }
+    const ext = TOP_EXT * L + ANCHOR;
+    items.push(item("เหล็กล่าง (หลัก)", by["+M กลางช่วง"], width, L + 2 * EMBED));
+    items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
+    for (const [lb, sides] of [["-M ที่รองรับต่อเนื่อง", sup.nCont], ["-M ที่รองรับไม่ต่อเนื่อง", sup.nDisc]]) {
+      if (!by[lb] || !sides) continue;
+      const where = lb.slice(3) + (sides > 1 ? ` (${sides} ด้าน)` : "");
+      items.push(item("เหล็กบน " + where, by[lb], width, ext, sides));
+      items.push(item("เหล็กกันร้าวบน " + where, temp, TOP_EXT * L, width, sides));
+    }
+    return summarize(L * width, r.inp.h, waste, items);
+  }
+  function twoWayBoq(r, waste) {
+    const { x: X, y: Y } = r.inp;
+    const fx = r.swapped ? r.fLong : r.fShort, fy = r.swapped ? r.fShort : r.fLong;
+    const pick = (fl, kind) => fl.find(f => f.kind === kind);
+    const ext = TOP_EXT * r.S + ANCHOR, items = [];
+    items.push(item("เหล็กล่าง แนว X", pick(fx, "pos"), Y, X + 2 * EMBED));
+    items.push(item("เหล็กล่าง แนว Y", pick(fy, "pos"), X, Y + 2 * EMBED));
+    for (const [name, cont, fl, len] of [["ขอบ 1", r.inp.e1, fx, Y], ["ขอบ 2", r.inp.e2, fx, Y], ["ขอบ 3", r.inp.e3, fy, X], ["ขอบ 4", r.inp.e4, fy, X]])
+      items.push(item(`เหล็กบน ${name} (${cont ? "ต่อเนื่อง" : "ไม่ต่อเนื่อง"})`, pick(fl, cont ? "negCont" : "negDisc"), len, ext));
+    return summarize(X * Y, r.inp.h, waste, items);
+  }
+
+  // ---------------- slab schedule (ตารางเหล็กพื้น)
+  const NONE = "—";
+  function drawingCallout(bar, sp) {
+    let s = (sp / 100).toFixed(3).replace(/0+$/, "");
+    if (s.split(".")[1].length < 2) s += "0";
+    return `${bar}@${s}`;
+  }
+  const co = (fl, kind) => { const f = fl.find((x) => x.label.includes(kind)); return f ? drawingCallout(f.bar, f.spacing) : NONE; };
+  const ld = (i) => `${i.sdl.toFixed(0)} / ${i.ll.toFixed(0)}`;
+  function oneWayRow(mark, r, width) {
+    const i = r.inp, temp = drawingCallout(r.temp.bar, r.temp.spacing);
+    if (i.support === "cantilever")
+      return { mark, kind: "พื้นยื่น", t: (i.h / 100).toFixed(2), size: `ยื่น ${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
+        short_bot: temp, short_top_cont: co(r.flexure, "-M ที่ยึดแน่น"), short_top_disc: NONE, long_bot: temp, long_top_cont: temp, long_top_disc: NONE,
+        remark: "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น; เหล็กล่างเป็นเหล็กกันร้าว" + (i.pEnd ? `; P ปลาย ${i.pEnd.toFixed(0)} kg/m` : ""), ok: r.ok, bars: [i.mainBar] };
+    const remark = { simple: "ช่วงเดียว", one_end: "ต่อเนื่องปลายเดียว", one_end_2: "ต่อเนื่องปลายเดียว (2 ช่วง)", both_ends: "ต่อเนื่องสองปลาย" }[i.support];
+    const topCont = co(r.flexure, "-M ที่รองรับต่อเนื่อง"), topDisc = co(r.flexure, "-M ที่รองรับไม่ต่อเนื่อง");
+    return { mark, kind: "ทางเดียว", t: (i.h / 100).toFixed(2), size: `${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
+      short_bot: co(r.flexure, "+M"), short_top_cont: topCont, short_top_disc: topDisc,
+      long_bot: temp, long_top_cont: topCont !== NONE ? temp : NONE, long_top_disc: topDisc !== NONE ? temp : NONE,
+      remark: remark + "; ทิศทางยาว = เหล็กกันร้าว (บนวางใต้เหล็กบนทิศทางสั้น)", ok: r.ok, bars: [i.mainBar] };
+  }
+  function twoWayRow(mark, r) {
+    const i = r.inp;
+    return { mark, kind: "สองทาง", t: (i.h / 100).toFixed(2), size: `${r.S.toFixed(2)} × ${r.L.toFixed(2)}`, load: ld(i),
+      short_bot: co(r.fShort, "+M"), short_top_cont: co(r.fShort, "ขอบต่อเนื่อง"), short_top_disc: co(r.fShort, "ขอบไม่ต่อเนื่อง"),
+      long_bot: co(r.fLong, "+M"), long_top_cont: co(r.fLong, "ขอบต่อเนื่อง"), long_top_disc: co(r.fLong, "ขอบไม่ต่อเนื่อง"),
+      remark: `Case ${r.cs}, m = ${r.m.toFixed(2)}; เหล็กทิศทางยาววางชั้นใน`, ok: r.ok, bars: [i.bar] };
+  }
+  const lapLength = (bar) => Math.max(0.30, (bar.startsWith("RB") ? 48 : 40) * BARS[bar][0] / 100);
+  function scheduleNotes(fc, grade, cover, bars) {
+    const laps = [...new Set(bars)].sort((a, b) => BARS[a][0] - BARS[b][0]).map((b) => `${b} ≥ ${lapLength(b).toFixed(2)} m`).join(", ");
+    return [
+      `คอนกรีต f'c = ${fc.toFixed(0)} ksc (ทรงกระบอก), เหล็กเสริม ${grade}, ระยะหุ้มคอนกรีต ${cover.toFixed(1)} cm`,
+      "เหล็กล่างยาวตลอดช่วง ฝังเข้าคานอย่างน้อย 0.10 m",
+      "เหล็กบนยื่นจากขอบคาน 0.30L (L = ช่วงสั้นสำหรับพื้นสองทาง, ช่วงพื้นสำหรับพื้นทางเดียว)",
+      "พื้นสองทาง: เหล็กทิศทางสั้นวางชั้นนอก (ล่างสุด/บนสุด) เหล็กทิศทางยาววางชั้นใน",
+      `ระยะทาบเหล็ก: ${laps} (RB ต้องงอขอ)`,
+      "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 0.30 m และต้องไม่น้อยกว่า As,min",
+      "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
+      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว ระยะห่างเหล็กทุกตำแหน่งไม่เกิน 0.30 m",
+      "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
+      "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
+    ];
+  }
+  const SCHEDULE_COLUMNS = { mark: "พื้น", kind: "ประเภท", t: "หนา (m)", size: "ขนาด (m)", load: "SDL / LL (kg/m²)",
+    short_bot: "ทิศทางสั้น: ล่าง", short_top_cont: "ทิศทางสั้น: บน ขอบต่อเนื่อง", short_top_disc: "ทิศทางสั้น: บน ขอบไม่ต่อเนื่อง",
+    long_bot: "ทิศทางยาว: ล่าง", long_top_cont: "ทิศทางยาว: บน ขอบต่อเนื่อง", long_top_disc: "ทิศทางยาว: บน ขอบไม่ต่อเนื่อง", remark: "หมายเหตุ" };
+
+  return { BARS, STEEL_GRADES, CODES, ONE_WAY, CASE_NAMES, concrete, steel, rhoBal, rhoMax, designFlexure, coefficient,
+    crackedI, designOneWay, designTwoWay, oneWayBoq, twoWayBoq,
+    drawingCallout, oneWayRow, twoWayRow, lapLength, scheduleNotes, SCHEDULE_COLUMNS };
+})();
+if (typeof module !== "undefined") module.exports = RC;
+</script>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const val = (id) => parseFloat($(id).value);
+  const fmt = (v, d = 1) => Number.isFinite(v) ? v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) : "—";
+  const pill = (ok) => `<span class="pill ${ok ? "ok" : "ng"}">${ok ? "ผ่าน" : "ไม่ผ่าน"}</span>`;
+  const txt = (ok) => ok ? "✅ ผ่าน" : "❌ ไม่ผ่าน";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---- populate selects
+  const fill = (id, entries, sel) => { $(id).innerHTML = entries.map(([v, t]) => `<option value="${v}"${v === sel ? " selected" : ""}>${t}</option>`).join(""); };
+  fill("code", Object.entries(RC.CODES).map(([k, c]) => [k, c.name]), "eit");
+  fill("grade", Object.keys(RC.STEEL_GRADES).map((g) => [g, `${g} (fy = ${RC.STEEL_GRADES[g].toLocaleString()} ksc)`]), "SD40");
+  fill("ow_sup", Object.entries(RC.ONE_WAY).map(([k, s]) => [k, s.label]), "simple");
+  const bars = Object.keys(RC.BARS).map((b) => [b, b]);
+  fill("ow_bar", bars, "DB12"); fill("tw_bar", bars, "DB12");
+
+  // ---- tabs (bare #token deep links)
+  const tabs = ["ow", "tw", "sc", "th"];
+  function show(t) {
+    for (const k of tabs) { $("pane-" + k).hidden = k !== t; $("tab-" + k).setAttribute("aria-selected", String(k === t)); }
+    try { localStorage.setItem("rcslab-tab", t); } catch (e) {}
+  }
+  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
+  let start = location.hash.slice(1);
+  if (!tabs.includes(start)) { try { start = localStorage.getItem("rcslab-tab") || "ow"; } catch (e) { start = "ow"; } }
+  show(tabs.includes(start) ? start : "ow");
+  window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (tabs.includes(h)) show(h); });
+
+  function common() {
+    const code = RC.CODES[$("code").value];
+    const grade = $("grade").value;
+    const c = RC.concrete(val("fc") || 240, val("gamma") || 2400);
+    const s = RC.steel(RC.STEEL_GRADES[grade]);
+    $("derived").innerHTML = `<span>U = ${code.dl}D + ${code.ll}L</span><span>φb = ${code.phiB}, φv = ${code.phiV}</span>` +
+      `<span>β₁ = ${c.beta1.toFixed(3)}</span><span>Ec = ${fmt(c.Ec, 0)} ksc</span><span>ρtemp = ${s.rhoTemp.toFixed(4)}</span>` +
+      `<span>ρmax = ${RC.rhoMax(c, s).toFixed(4)}</span>`;
+    return { code, grade, c, s, cover: val("cover") || 2, waste: (val("waste") || 0) / 100 };
+  }
+
+  const metric = (label, value, sub) => `<div class="metric"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+
+  function flexTable(rows, withC) {
+    return `<div class="tw"><table><thead><tr><th>ตำแหน่ง</th>${withC ? "<th>C</th>" : ""}<th>Mu (kg-m/m)</th><th>d (cm)</th><th>ρ req</th>` +
+      `<th>As req</th><th>As min</th><th>เหล็กเสริม</th><th>As prov</th><th>φMn (kg-m/m)</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>` +
+      rows.map((f) => `<tr><td>${f.label}</td>${withC ? `<td class="n">${f.C.toFixed(4)}</td>` : ""}<td class="n">${fmt(f.Mu)}</td><td class="n">${fmt(f.d, 2)}</td>` +
+        `<td class="n">${Number.isFinite(f.rho) ? f.rho.toFixed(5) : "—"}</td><td class="n">${fmt(f.AsReq, 2)}</td><td class="n">${fmt(f.AsMin, 2)}</td>` +
+        `<td class="bar">${f.callout}</td><td class="n">${fmt(f.AsProv, 2)}</td><td class="n">${fmt(f.phiMn)}</td><td>${pill(f.ok)}</td><td class="note">${esc(f.note)}</td></tr>`).join("") +
+      `</tbody></table></div><small style="color:var(--muted);font-size:12px">As มีหน่วย cm²/m</small>`;
+  }
+
+  function boqBlock(q) {
+    return `<section class="block"><h2>ปริมาณวัสดุ (BOQ) <small>ต่อ 1 แผ่นพื้น</small></h2>
+      <div class="metrics">${metric("คอนกรีต", fmt(q.concrete, 2) + " m³")}${metric("ไม้แบบท้องพื้น", fmt(q.formwork, 2) + " m²")}
+      ${metric(`เหล็กเสริม (+${fmt(q.waste * 100, 0)}%)`, fmt(q.total) + " kg")}${metric("อัตราส่วนเหล็ก", fmt(q.ratio) + " kg/m³")}</div>
+      <div class="tw"><table><thead><tr><th>รายการ</th><th>เหล็ก</th><th>@ (m)</th><th>จำนวน (เส้น)</th><th>ยาว/เส้น (m)</th><th>ยาวรวม (m)</th><th>น้ำหนัก (kg)</th></tr></thead><tbody>
+      ${q.items.map((i) => `<tr><td>${i.desc}</td><td class="bar">${i.bar}</td><td class="n">${(i.spacing / 100).toFixed(3)}</td><td class="n">${i.count}</td>` +
+        `<td class="n">${fmt(i.length, 2)}</td><td class="n">${fmt(i.total, 2)}</td><td class="n">${fmt(i.weight)}</td></tr>`).join("")}
+      </tbody></table></div>
+      <small style="color:var(--muted);font-size:12.5px">แยกขนาด (รวมเผื่อ): ${Object.entries(q.byBar).map(([b, w]) => `${b} ${fmt(w)} kg`).join(", ")} · ความยาวเหล็กเป็นค่าประมาณสำหรับถอดปริมาณ ไม่ใช่แบบขยายรายละเอียด</small></section>`;
+  }
+  function boqMd(q) {
+    return ["", "## ปริมาณวัสดุ (BOQ) ต่อ 1 แผ่นพื้น",
+      `- คอนกรีต = ${q.area.toFixed(2)} m² × ${(q.h / 100).toFixed(3)} m = ${q.concrete.toFixed(2)} m³`,
+      `- ไม้แบบท้องพื้น = ${q.formwork.toFixed(2)} m²`,
+      `- เหล็กเสริมสุทธิ = ${fmt(q.net)} kg, รวมเผื่อ ${fmt(q.waste * 100, 0)}% = **${fmt(q.total)} kg** (${q.ratio.toFixed(1)} kg/m³)`, "",
+      "| รายการ | เหล็ก | @ (m) | จำนวน | ยาว/เส้น (m) | ยาวรวม (m) | น้ำหนัก (kg) |", "|---|---|---|---|---|---|---|",
+      ...q.items.map((i) => `| ${i.desc} | ${i.bar} | ${(i.spacing / 100).toFixed(3)} | ${i.count} | ${i.length.toFixed(2)} | ${i.total.toFixed(2)} | ${i.weight.toFixed(1)} |`)];
+  }
+
+  function reportBlock(md, id) {
+    return `<section class="block"><h2>รายการคำนวณ <small>Markdown</small></h2>
+      <div class="actions"><button class="btn" type="button" id="${id}-copy">คัดลอกรายการคำนวณ</button><span id="${id}-msg">วางลงใน Word, LINE หรือโปรแกรมแก้ไขข้อความได้</span></div>
+      <textarea class="report" id="${id}-text" readonly>${esc(md)}</textarea></section>`;
+  }
+  function wireCopy(id) {
+    $(id + "-copy").addEventListener("click", () => {
+      const ta = $(id + "-text");
+      const done = () => { $(id + "-msg").textContent = "คัดลอกแล้ว"; };
+      const fallback = () => { ta.focus(); ta.select(); $(id + "-msg").textContent = "เลือกข้อความแล้ว กด Ctrl+C / ⌘C เพื่อคัดลอก"; };
+      try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (e) { fallback(); }
+    });
+  }
+
+  // ---- SVG: one-way moment diagram (positive drawn below the axis)
+  function momentSvg(r) {
+    const W = 900, H = 240, padL = 58, padR = 16, padT = 18, padB = 34;
+    const L = r.inp.span, w = r.wu, sup = r.sup, n = 81;
+    const xs = Array.from({ length: n }, (_, i) => L * i / (n - 1));
+    let ys;
+    if (r.inp.support === "cantilever") ys = xs.map((x) => -(w * (L - x) ** 2 / 2 + r.pu * (L - x)));
+    else {
+      let ml = sup.negDisc ? w * L * L / sup.negDisc : 0, mr = sup.negCont ? w * L * L / sup.negCont : 0;
+      if (r.inp.support === "both_ends") ml = mr;
+      if (r.inp.support === "simple") ml = mr = 0; // top bars at simple ends are for crack control only
+      const mp = w * L * L / sup.pos, a = (-ml - mr - 2 * mp) * 2 / (L * L), b = (ml - mr) / L - a * L;
+      ys = xs.map((x) => a * x * x + b * x - ml);
+    }
+    const yMax = Math.max(0, ...ys), yMin = Math.min(0, ...ys), span = (yMax - yMin) || 1;
+    const sx = (x) => padL + (W - padL - padR) * x / L;
+    const syR = (y) => padT + (H - padT - padB) * (y - yMin) / span;
+    const pts = xs.map((x, i) => `${sx(x).toFixed(1)},${syR(ys[i]).toFixed(1)}`);
+    const path = `M${sx(0)},${syR(0)} L${pts.join(" L")} L${sx(L)},${syR(0)} Z`;
+    const ticks = [yMin, 0, yMax].filter((v, i, a) => a.indexOf(v) === i);
+    const iPeak = ys.reduce((bi, v, i) => Math.abs(v) > Math.abs(ys[bi]) ? i : bi, 0);
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="แผนภาพโมเมนต์">
+      ${ticks.map((t) => `<line x1="${padL}" x2="${W - padR}" y1="${syR(t)}" y2="${syR(t)}" stroke="var(--line)" ${t === 0 ? 'stroke-width="1.5" stroke="var(--muted)"' : 'stroke-dasharray="3 3"'}/>` +
+        `<text x="${padL - 6}" y="${syR(t) + 4}" text-anchor="end">${fmt(t, 0)}</text>`).join("")}
+      <path d="${path}" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+      <circle cx="${sx(xs[iPeak])}" cy="${syR(ys[iPeak])}" r="3.5" fill="var(--accent)"/>
+      <text x="${Math.min(Math.max(sx(xs[iPeak]), padL + 40), W - padR - 40)}" y="${syR(ys[iPeak]) + (ys[iPeak] > 0 ? -8 : 16)}" text-anchor="middle" style="fill:var(--fg)">${fmt(ys[iPeak], 0)} kg-m/m</text>
+      <text x="${sx(0)}" y="${H - 10}" text-anchor="start">0</text>
+      <text x="${sx(L)}" y="${H - 10}" text-anchor="end">${L.toFixed(2)} m</text>
+      <text x="${(sx(0) + sx(L)) / 2}" y="${H - 10}" text-anchor="middle">ระยะตามช่วง · +M แสดงด้านล่าง (ด้านรับแรงดึง)</text>
+    </svg>`;
+  }
+
+  // ---- SVG: two-way plan
+  function planSvg(r) {
+    const X = r.inp.x, Y = r.inp.y, box = 300, pad = 48;
+    const k = box / Math.max(X, Y), w = X * k, h = Y * k, W = w + 2 * pad, H = h + 2 * pad;
+    const x0 = pad, y0 = pad;
+    const fx = (r.swapped ? r.fLong : r.fShort).find((f) => f.kind === "pos");
+    const fy = (r.swapped ? r.fShort : r.fLong).find((f) => f.kind === "pos");
+    const edge = (x1, y1, x2, y2, cont) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${cont ? "var(--fg)" : "var(--ng)"}" stroke-width="${cont ? 6 : 3}" ${cont ? "" : 'stroke-dasharray="8 6"'} stroke-linecap="square"/>`;
+    const i = r.inp;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="แปลนแผ่นพื้น" style="max-width:${Math.round(W * 1.15)}px;margin:0 auto">
+      <rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="var(--bg)"/>
+      ${edge(x0, y0, x0, y0 + h, i.e1)}${edge(x0 + w, y0, x0 + w, y0 + h, i.e2)}${edge(x0, y0 + h, x0 + w, y0 + h, i.e3)}${edge(x0, y0, x0 + w, y0, i.e4)}
+      <line x1="${x0 + 0.08 * w}" x2="${x0 + 0.92 * w}" y1="${y0 + 0.62 * h}" y2="${y0 + 0.62 * h}" stroke="var(--steel-x)" stroke-width="3"/>
+      <line x1="${x0 + 0.35 * w}" x2="${x0 + 0.35 * w}" y1="${y0 + 0.08 * h}" y2="${y0 + 0.92 * h}" stroke="var(--steel-y)" stroke-width="3"/>
+      <text x="${x0 + 0.64 * w}" y="${y0 + 0.62 * h - 7}" text-anchor="middle" style="fill:var(--steel-x);font-weight:500">X: ${fx.callout}</text>
+      <text transform="translate(${x0 + 0.35 * w - 7},${y0 + 0.3 * h}) rotate(-90)" text-anchor="middle" style="fill:var(--steel-y);font-weight:500">Y: ${fy.callout}</text>
+      <text x="${x0 + w / 2}" y="${y0 + h + 30}" text-anchor="middle">${X.toFixed(2)} m · ขอบ 3</text>
+      <text x="${x0 + w / 2}" y="${y0 - 16}" text-anchor="middle">ขอบ 4</text>
+      <text transform="translate(${x0 - 18},${y0 + h / 2}) rotate(-90)" text-anchor="middle">${Y.toFixed(2)} m · ขอบ 1</text>
+      <text transform="translate(${x0 + w + 24},${y0 + h / 2}) rotate(-90)" text-anchor="middle">ขอบ 2</text>
+    </svg>`;
+  }
+
+  // ---- one-way render
+  function renderOW() {
+    const g = common();
+    const support = $("ow_sup").value;
+    $("ow_P_wrap").hidden = support !== "cantilever";
+    const inp = { span: val("ow_L") || 3, h: val("ow_h") || 15, support, sdl: val("ow_sdl") || 0, ll: val("ow_ll") || 0, cover: g.cover,
+      mainBar: $("ow_bar").value, pEnd: support === "cantilever" ? (val("ow_P") || 0) : 0, xi: val("ow_xi") };
+    const r = RC.designOneWay(inp, g.c, g.s, g.code), q = RC.oneWayBoq(r, val("ow_W") || 1, g.waste), df = r.deflection;
+    last.ow = () => RC.oneWayRow(markOf("ow"), r, val("ow_W") || 1);
+    const md = [
+      "# RC Slab Design — พื้นทางเดียว (One-way slab)", "",
+      `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
+      `- ช่วงพื้น L = ${inp.span.toFixed(2)} m, ความหนา h = ${inp.h.toFixed(1)} cm, เงื่อนไข: ${r.sup.label}`,
+      ...(inp.pEnd ? [`- น้ำหนักแนวเส้นที่ปลายพื้นยื่น P = ${inp.pEnd.toFixed(1)} kg/m (DL)`] : []), "",
+      "## น้ำหนักบรรทุก", `- SW = ${r.sw.toFixed(1)}, SDL = ${inp.sdl.toFixed(1)}, DL = ${r.wd.toFixed(1)}, LL = ${inp.ll.toFixed(1)} kg/m²`,
+      `- wu = ${g.code.dl}(${r.wd.toFixed(1)}) + ${g.code.ll}(${inp.ll.toFixed(1)}) = ${r.wu.toFixed(1)} kg/m²`, "",
+      "## ความหนาต่ำสุด", `- h,min = ${r.hMin.toFixed(2)} cm → ${txt(r.hOk)}`, "",
+      `## เหล็กเสริมรับโมเมนต์ (d = ${r.d.toFixed(2)} cm)`,
+      ...[...r.flexure, r.temp].map((f) => `- ${f.label}: Mu = ${f.Mu.toFixed(1)} kg-m/m, As,req = ${f.AsDesign.toFixed(2)} cm²/m → **${f.callout}** (As = ${f.AsProv.toFixed(2)} cm²/m, φMn = ${f.phiMn.toFixed(1)}) ${txt(f.ok)}`), "",
+      "## แรงเฉือน", `- Vu = ${r.shear.Vu.toFixed(1)} kg/m, φVc = ${r.shear.phiVc.toFixed(1)} kg/m → ${txt(r.shear.ok)}`, "",
+      "## การแอ่นตัว (ACI 318, Branson Ie)",
+      `- Ec = ${fmt(df.Ec, 0)} ksc, n = ${df.n.toFixed(2)}, fr = ${df.fr.toFixed(1)} ksc`,
+      `- Ig = ${fmt(df.Ig, 0)} cm⁴, Icr = ${fmt(df.Icr, 0)} cm⁴, Mcr = ${fmt(df.Mcr / 100)} kg-m`,
+      `- ΔD = ${df.dD.toFixed(3)} cm, ΔD+L = ${df.dDL.toFixed(3)} cm`,
+      `- ΔL = ${df.dL.toFixed(3)} cm ≤ ${df.limL.toFixed(3)} cm → ${txt(df.okL)}`,
+      `- λ·ΔD + ΔL = ${df.lam.toFixed(1)}×${df.dD.toFixed(3)} + ${df.dL.toFixed(3)} = ${df.dLong.toFixed(3)} cm ≤ ${df.limLong.toFixed(3)} cm → ${txt(df.okLong)}`,
+      ...boqMd(q), ...(r.notes.length ? ["", "## หมายเหตุ", ...r.notes.map((n) => `- ${n}`)] : []), "", `**สรุป: ${txt(r.ok)}**`,
+    ].join("\n");
+
+    $("out-ow").innerHTML = `
+      <div class="verdict ${r.ok ? "ok" : "ng"}">${r.ok ? "ผ่านทุกเกณฑ์" : "มีรายการไม่ผ่าน ดูรายละเอียดด้านล่าง"}</div>
+      <div class="metrics">
+        ${metric("น้ำหนักพื้น (SW)", fmt(r.sw, 0) + " kg/m²")}${metric("DL รวม", fmt(r.wd, 0) + " kg/m²")}
+        ${metric("wu (factored)", fmt(r.wu, 0) + " kg/m²")}${metric("d", fmt(r.d, 2) + " cm")}
+        ${metric("h,min (ACI 9.5a)", fmt(r.hMin) + " cm", pill(r.hOk))}
+        ${metric("แรงเฉือน Vu/φVc", r.shear.ratio.toFixed(2), `${fmt(r.shear.Vu, 0)} / ${fmt(r.shear.phiVc, 0)} kg/m ${pill(r.shear.ok)}`)}
+      </div>
+      <section class="block"><h2>เหล็กเสริม <small>d = ${r.d.toFixed(2)} cm · s,max = ${Math.min(3 * inp.h, 30)} cm</small></h2>${flexTable([...r.flexure, r.temp])}</section>
+      <section class="block"><h2>แผนภาพโมเมนต์ <small>ประมาณจากสัมประสิทธิ์</small></h2>${momentSvg(r)}</section>
+      <section class="block"><h2>การแอ่นตัว <small>Branson Ie · ξ = ${inp.xi}</small></h2>
+        <div class="metrics">
+          ${metric("ΔL ทันที (LL)", fmt(df.dL * 10, 2) + " mm", `≤ L/360 = ${fmt(df.limL * 10, 2)} mm ${pill(df.okL)}`)}
+          ${metric("λΔD + ΔL ระยะยาว", fmt(df.dLong * 10, 2) + " mm", `≤ L/240 = ${fmt(df.limLong * 10, 2)} mm ${pill(df.okLong)}`)}
+          ${metric("Ie (D+L)", fmt(df.IeDL, 0) + " cm⁴", `Ig = ${fmt(df.Ig, 0)}, Icr = ${fmt(df.Icr, 0)}`)}
+          ${metric("Mcr / Ma(D+L)", (df.Mcr / df.MaDL).toFixed(2), df.Mcr >= df.MaDL ? "ไม่แตกร้าว" : "แตกร้าว")}
+        </div></section>
+      ${boqBlock(q)}
+      ${r.notes.length ? `<div class="note-box"><ul class="notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
+      ${reportBlock(md, "ow-rep")}`;
+    wireCopy("ow-rep");
+  }
+
+  // ---- two-way render
+  function renderTW() {
+    const g = common();
+    const inp = { x: val("tw_x") || 4, y: val("tw_y") || 5, h: val("tw_h") || 12, sdl: val("tw_sdl") || 0, ll: val("tw_ll") || 0,
+      cover: g.cover, bar: $("tw_bar").value, e1: $("tw_e1").checked, e2: $("tw_e2").checked, e3: $("tw_e3").checked, e4: $("tw_e4").checked };
+    const r = RC.designTwoWay(inp, g.c, g.s, g.code), q = RC.twoWayBoq(r, g.waste);
+    last.tw = () => RC.twoWayRow(markOf("tw"), r);
+    const md = [
+      "# RC Slab Design — พื้นสองทาง (Two-way slab, ACI 318-63 Method 2)", "",
+      `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
+      `- S = ${r.S.toFixed(2)} m, L = ${r.L.toFixed(2)} m, m = ${r.m.toFixed(3)}, h = ${inp.h.toFixed(1)} cm`, `- ${RC.CASE_NAMES[r.cs]}`, "",
+      "## น้ำหนักบรรทุก", `- SW = ${r.sw.toFixed(1)}, SDL = ${inp.sdl.toFixed(1)}, DL = ${r.wd.toFixed(1)}, LL = ${inp.ll.toFixed(1)} kg/m²`,
+      `- wu = ${g.code.dl}(${r.wd.toFixed(1)}) + ${g.code.ll}(${inp.ll.toFixed(1)}) = ${r.wu.toFixed(1)} kg/m²`, "",
+      "## ความหนาต่ำสุด", `- h,min = เส้นรอบรูป/180 = ${r.hMin.toFixed(2)} cm → ${txt(r.hOk)}`, "",
+      "## โมเมนต์และเหล็กเสริม (M = C·wu·S²)",
+      ...[...r.fShort, ...r.fLong].map((f) => `- ${f.label}: C = ${f.C.toFixed(4)}, Mu = ${f.Mu.toFixed(1)} kg-m/m, d = ${f.d.toFixed(2)} cm, As,req = ${f.AsDesign.toFixed(2)} cm²/m → **${f.callout}** ${txt(f.ok)}`), "",
+      "## แรงเฉือน", `- Vu = ${r.shear.Vu.toFixed(1)} kg/m, φVc = ${r.shear.phiVc.toFixed(1)} kg/m → ${txt(r.shear.ok)}`, "",
+      "## น้ำหนักถ่ายลงคาน", `- คานด้านสั้น (ยาว S): wu·S/3 = ${r.beamShort.toFixed(1)} kg/m`, `- คานด้านยาว (ยาว L): wu·S/3·(3−m²)/2 = ${r.beamLong.toFixed(1)} kg/m`,
+      ...boqMd(q), "", "## หมายเหตุ", ...r.notes.map((n) => `- ${n}`), "", `**สรุป: ${txt(r.ok)}**`,
+    ].join("\n");
+
+    $("out-tw").innerHTML = `
+      ${r.isTwoWay ? "" : `<div class="note-box">m = S/L = ${r.m.toFixed(2)} &lt; 0.5 แผ่นพื้นทำงานแบบทางเดียว ให้ออกแบบในแท็บพื้นทางเดียว</div>`}
+      <div class="verdict ${r.ok ? "ok" : "ng"}">${r.ok ? "ผ่านทุกเกณฑ์" : "มีรายการไม่ผ่าน ดูรายละเอียดด้านล่าง"}</div>
+      <div class="metrics">
+        ${metric("wu (factored)", fmt(r.wu, 0) + " kg/m²", `DL ${fmt(r.wd, 0)} · LL ${fmt(inp.ll, 0)}`)}
+        ${metric("m = S/L", r.m.toFixed(3), `S ${r.S.toFixed(2)} m · L ${r.L.toFixed(2)} m`)}
+        ${metric("กรณี (Method 2)", "Case " + r.cs, RC.CASE_NAMES[r.cs].split("— ")[1])}
+        ${metric("h,min (P/180)", fmt(r.hMin) + " cm", pill(r.hOk))}
+        ${metric("แรงเฉือน Vu/φVc", r.shear.ratio.toFixed(2), `${fmt(r.shear.Vu, 0)} / ${fmt(r.shear.phiVc, 0)} kg/m ${pill(r.shear.ok)}`)}
+      </div>
+      <div class="split">
+        <section class="block"><h2>แปลนแผ่นพื้น <small>เหล็กล่าง · เส้นประแดง = ขอบไม่ต่อเนื่อง</small></h2>${planSvg(r)}</section>
+        <section class="block"><h2>น้ำหนักถ่ายลงคาน</h2>
+          <div class="metrics">${metric("คานด้านสั้น · wS/3", fmt(r.beamShort, 0) + " kg/m", `คานยาว ${r.S.toFixed(2)} m`)}
+          ${metric("คานด้านยาว · wS/3·(3−m²)/2", fmt(r.beamLong, 0) + " kg/m", `คานยาว ${r.L.toFixed(2)} m`)}</div>
+          <ul class="notes">${r.notes.filter((n) => !n.startsWith("m = ")).map((n) => `<li>${esc(n)}</li>`).join("")}</ul></section>
+      </div>
+      <section class="block"><h2>ช่วงสั้น (Short span) <small>S = ${r.S.toFixed(2)} m · d = ${r.dS.toFixed(2)} cm</small></h2>${flexTable(r.fShort, true)}</section>
+      <section class="block"><h2>ช่วงยาว (Long span) <small>L = ${r.L.toFixed(2)} m · d = ${r.dL.toFixed(2)} cm</small></h2>${flexTable(r.fLong, true)}</section>
+      ${boqBlock(q)}
+      ${reportBlock(md, "tw-rep")}`;
+    wireCopy("tw-rep");
+  }
+
+  // ---- slab schedule, kept in this browser
+  const last = {};
+  const KEY = "rcslab-schedule";
+  let schedule = {};
+  try { schedule = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { schedule = {}; }
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(schedule)); } catch (e) {} };
+  const markOf = (k) => $(k + "-mark").value.trim();
+  const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  function nextMark() { let n = 1; while (schedule["S" + n]) n++; return "S" + n; }
+
+  function addRow(k) {
+    const mark = markOf(k);
+    if (!mark) { $(k + "-add-msg").textContent = "ใส่ชื่อพื้นก่อน เช่น S1"; return; }
+    const existed = !!schedule[mark];
+    schedule[mark] = last[k]();
+    persist();
+    $("ow-mark").value = $("tw-mark").value = nextMark();
+    $(k + "-add-msg").textContent = `${existed ? "แทนที่" : "เพิ่ม"} ${mark} แล้ว · ${Object.keys(schedule).length} รายการในตาราง`;
+    renderSchedule();
+  }
+  $("ow-add").addEventListener("click", () => addRow("ow"));
+  $("tw-add").addEventListener("click", () => addRow("tw"));
+  $("ow-mark").value = $("tw-mark").value = nextMark();
+
+  function scheduleRows() { return Object.keys(schedule).sort(natural).map((k) => schedule[k]); }
+  function scheduleText(sep) {
+    const keys = Object.keys(RC.SCHEDULE_COLUMNS), rows = scheduleRows();
+    const line = (cells) => sep === "|" ? `| ${cells.join(" | ")} |` : cells.join("\t");
+    const out = [line(keys.map((k) => RC.SCHEDULE_COLUMNS[k]))];
+    if (sep === "|") out.push("|" + "---|".repeat(keys.length));
+    for (const r of rows) out.push(line(keys.map((k) => r[k])));
+    return out.join("\n");
+  }
+  function copyText(text, msgId, okMsg) {
+    const msg = $(msgId);
+    const fallback = () => { const ta = $("sc-text"); ta.value = text; ta.hidden = false; ta.focus(); ta.select(); msg.textContent = "เลือกข้อความแล้ว กด Ctrl+C / ⌘C เพื่อคัดลอก"; };
+    try { navigator.clipboard.writeText(text).then(() => { msg.textContent = okMsg; }, fallback); } catch (e) { fallback(); }
+  }
+
+  function renderSchedule() {
+    const g = common(), rows = scheduleRows();
+    $("sc-count").textContent = rows.length ? `(${rows.length})` : "";
+    if (!rows.length) {
+      $("out-sc").innerHTML = `<section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule</small></h2>
+        <p class="empty">ยังไม่มีรายการ ออกแบบพื้นในแท็บพื้นทางเดียวหรือพื้นสองทาง แล้วกด “เพิ่ม/แทนที่ในตาราง” ด้านล่างผลการคำนวณ</p></section>`;
+      return;
+    }
+    const bad = rows.filter((r) => !r.ok).map((r) => r.mark);
+    const cell = (v) => `<td class="bar">${esc(v)}</td>`;
+    const notes = RC.scheduleNotes(g.c.fc, g.grade, g.cover, rows.flatMap((r) => r.bars));
+    $("out-sc").innerHTML = `
+      ${bad.length ? `<div class="verdict ng">พื้น ${bad.map(esc).join(", ")} ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ</div>` : ""}
+      <section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule · ${rows.length} รายการ</small></h2>
+        <div class="tw"><table class="sched">
+          <thead>
+            <tr><th rowspan="2">พื้น</th><th rowspan="2">ประเภท</th><th rowspan="2">หนา (m)</th><th rowspan="2">ขนาด (m)</th><th rowspan="2">SDL / LL<br>(kg/m²)</th>
+              <th colspan="3" class="grp">ทิศทางสั้น</th><th colspan="3" class="grp">ทิศทางยาว</th><th rowspan="2">หมายเหตุ</th><th rowspan="2"></th></tr>
+            <tr><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th></tr>
+          </thead><tbody>
+          ${rows.map((r) => `<tr><td>${esc(r.mark)} ${r.ok ? "" : pill(false)}</td><td>${r.kind}</td><td class="n">${r.t}</td><td class="n">${r.size}</td><td class="n">${r.load}</td>
+            ${cell(r.short_bot)}${cell(r.short_top_cont)}${cell(r.short_top_disc)}${cell(r.long_bot)}${cell(r.long_top_cont)}${cell(r.long_top_disc)}
+            <td class="note">${esc(r.remark)}</td><td><button class="ghost" type="button" data-del="${esc(r.mark)}" aria-label="ลบ ${esc(r.mark)}">ลบ</button></td></tr>`).join("")}
+          </tbody></table></div>
+        <div class="actions">
+          <button class="btn" type="button" id="sc-copy-xl">คัดลอกไปวางใน Excel</button>
+          <button class="btn" type="button" id="sc-copy-md">คัดลอกเป็น Markdown</button>
+          <button class="ghost" type="button" id="sc-clear">ล้างตารางทั้งหมด</button>
+          <span id="sc-msg">ตารางเก็บไว้ในเบราว์เซอร์นี้เท่านั้น</span></div>
+        <textarea class="report" id="sc-text" readonly hidden></textarea>
+      </section>
+      <section class="block"><h2>หมายเหตุสำหรับแบบ</h2><ol class="dnotes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ol></section>`;
+    const notesMd = ["", "## หมายเหตุ", ...notes.map((n) => `- ${n}`)].join("\n");
+    $("sc-copy-xl").addEventListener("click", () => copyText(scheduleText("\t") + "\n\n" + notes.map((n, i) => `${i + 1}. ${n}`).join("\n"), "sc-msg", "คัดลอกแล้ว วางใน Excel ได้เลย (แยกคอลัมน์อัตโนมัติ)"));
+    $("sc-copy-md").addEventListener("click", () => copyText("# ตารางเหล็กพื้น (Slab Schedule)\n\n" + scheduleText("|") + "\n" + notesMd, "sc-msg", "คัดลอก Markdown แล้ว"));
+    $("sc-clear").addEventListener("click", (e) => {
+      const b = e.currentTarget;
+      if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "กดอีกครั้งเพื่อยืนยันการล้าง"; return; }
+      schedule = {}; persist(); $("ow-mark").value = $("tw-mark").value = nextMark(); renderSchedule();
+    });
+    document.querySelectorAll("#out-sc [data-del]").forEach((b) => b.addEventListener("click", () => {
+      delete schedule[b.dataset.del]; persist(); renderSchedule();
+    }));
+  }
+
+  function renderAll() { renderOW(); renderTW(); renderSchedule(); }
+  for (const el of document.querySelectorAll("#matbar input, #matbar select")) el.addEventListener("input", renderAll);
+  for (const el of document.querySelectorAll("#form-ow input, #form-ow select")) el.addEventListener("input", renderOW);
+  for (const el of document.querySelectorAll("#form-tw input, #form-tw select")) el.addEventListener("input", renderTW);
+  renderAll();
+})();
+</script>
+</body>
+</html>

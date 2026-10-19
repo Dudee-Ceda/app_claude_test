@@ -19,15 +19,37 @@
 - แผนภาพโมเมนต์, แปลนแผ่นพื้นพร้อมเหล็กเสริม
 - ดาวน์โหลดรายการคำนวณเป็น **PDF** (ฟอนต์ไทย Sarabun, OFL) หรือ Markdown
 
-## เว็บเวอร์ชันเบราว์เซอร์ (ไม่ต้องติดตั้ง)
-`web/index.html` เป็นเว็บไฟล์เดียว คำนวณด้วย JavaScript ในเบราว์เซอร์ ผลตรงกับ engine Python
-(ตรวจด้วย `tests/test_web_parity.py`) เปิดไฟล์ได้ทันที หรือ deploy เป็น GitHub Pages ได้
-ข้อต่างจากเวอร์ชัน Streamlit: ไม่มีปุ่มดาวน์โหลด PDF (ใช้ปุ่มคัดลอกรายการคำนวณแทน)
+## อัปโหลดขึ้นเว็บ
 
-## Deploy เวอร์ชัน Streamlit (Streamlit Community Cloud)
+มี 2 แบบ เลือกได้ตามต้องการ
+
+| | เว็บไฟล์เดียว (`docs/index.html`) | แอป Streamlit (`app.py`) |
+|---|---|---|
+| ที่ฝาก | GitHub Pages, Netlify, Cloudflare Pages, โฮสต์ใดก็ได้ | Streamlit Community Cloud (ฟรี) |
+| คำนวณที่ | เบราว์เซอร์ผู้ใช้ (JavaScript) — เร็ว ไม่ต้องมีเซิร์ฟเวอร์ | เซิร์ฟเวอร์ Python |
+| ส่งออก | คัดลอกไป Excel / Markdown | ดาวน์โหลด PDF, Excel (.csv), Markdown |
+| ตารางเหล็กพื้น | เก็บในเบราว์เซอร์เครื่องนั้น | เก็บระหว่างเปิดหน้าเว็บ |
+
+ทั้งสองแบบให้ผลคำนวณเท่ากัน (ตรวจด้วย `tests/test_web_parity.py`)
+
+### แบบที่ 1: GitHub Pages (เว็บไฟล์เดียว)
+1. GitHub → repo นี้ → **Settings → Pages**
+2. Source: **Deploy from a branch** → เลือก branch `claude/rc-slab-design-streamlit-o8fost` (หรือ `main` หลัง merge) → โฟลเดอร์ **`/docs`** → Save
+3. รอ 1–2 นาที จะได้ URL `https://<user>.github.io/app_claude_test/`
+
+หมายเหตุ: repo แบบ private ต้องใช้ GitHub แบบเสียเงินจึงจะเปิด Pages ได้ ถ้าไม่ใช่ ให้ใช้ Netlify แทน
+
+### แบบที่ 1 (ทางเลือก): Netlify / Cloudflare Pages
+ลากโฟลเดอร์ `docs/` ไปวางที่ https://app.netlify.com/drop จะได้ URL ทันที ไม่ต้องตั้งค่าอะไร
+
+### แบบที่ 2: Streamlit Community Cloud
 1. เข้า https://share.streamlit.io แล้วล็อกอินด้วย GitHub
-2. Create app → เลือก repo `dudee-ceda/app_claude_test`, branch `claude/rc-slab-design-streamlit-o8fost`, main file `app.py`
-3. Deploy — จะได้ URL แบบ `https://<ชื่อแอป>.streamlit.app`
+2. **Create app** → repo `dudee-ceda/app_claude_test`, branch `claude/rc-slab-design-streamlit-o8fost`, main file `app.py`
+3. Advanced settings → Python 3.12 → **Deploy** จะได้ `https://<ชื่อแอป>.streamlit.app`
+
+### แก้ไขเว็บไฟล์เดียว
+แก้ที่ `web/index.html` แล้วรัน `python scripts/build_web.py` เพื่อสร้าง `docs/index.html` ใหม่
+(`tests/test_site.py` จะเตือนถ้าลืม build)
 
 ## การใช้งาน (เครื่องตัวเอง)
 ```bash
@@ -53,6 +75,9 @@ rcslab/boq.py       # ถอดปริมาณวัสดุ
 rcslab/report_pdf.py# สร้าง PDF รายการคำนวณ
 rcslab/schedule.py  # ตารางเหล็กพื้น
 rcslab/fonts/       # ฟอนต์ Sarabun (SIL OFL 1.1)
+web/index.html      # เว็บไฟล์เดียว (ต้นฉบับ)
+docs/index.html     # เว็บสำหรับอัปโหลด (สร้างด้วย scripts/build_web.py)
+.streamlit/         # ค่าตั้ง Streamlit
 tests/              # unit tests
 ```
 
