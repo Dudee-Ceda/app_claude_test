@@ -109,6 +109,8 @@ def one_way_moment_figure(res: OneWayResult) -> go.Figure:
         mr = w * L**2 / sup.neg_cont if sup.neg_cont else 0.0
         if sup.name == "both_ends":
             ml = mr
+        if sup.name == "simple":  # top bars at simple ends are for crack control only
+            ml = mr = 0.0
         mp = w * L**2 / sup.pos
         # quadratic through (0,-ml), (L/2, mp), (L,-mr)
         a = (-ml - mr - 2 * mp) * 2 / L**2
@@ -405,8 +407,8 @@ with tab1:
         ll1 = st.number_input("LL — น้ำหนักจร (kg/m²)", 0.0, 2000.0, 200.0, 10.0, key="ow_ll")
     with c3:
         st.subheader("เหล็กเสริม")
-        main_bar = st.selectbox("เหล็กเสริมหลัก", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="ow_bar")
-        temp_bar = st.selectbox("เหล็กกันร้าว", BAR_NAMES, index=BAR_NAMES.index("RB9"), key="ow_tbar")
+        main_bar = st.selectbox("ขนาดเหล็กเสริม", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="ow_bar")
+        st.caption("ใช้ขนาดเดียวทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว")
     is_cant = ONE_WAY_SUPPORTS[support].name == "cantilever"
     with c1:
         width1 = st.number_input("ความกว้างแผ่นพื้น (ตั้งฉากกับช่วง) สำหรับ BOQ (m)", 0.5, 30.0, 4.0, 0.1,
@@ -421,7 +423,7 @@ with tab1:
                                                  1.2: "6 เดือน (ξ = 1.2)", 1.0: "3 เดือน (ξ = 1.0)"}[v])
 
     ow = design_one_way(
-        OneWayInput(span, h1, support, sdl1, ll1, cover, main_bar, temp_bar, p_end, xi), conc, steel, code
+        OneWayInput(span, h1, support, sdl1, ll1, cover, main_bar, p_end, xi), conc, steel, code
     )
     ow_boq = one_way_boq(ow, width1, waste)
     st.divider()
@@ -455,7 +457,7 @@ with tab1:
         st.info(n)
     download_buttons(report_one_way(ow, ow_boq), "rc_slab_one_way")
     st.divider()
-    add_to_schedule(lambda m: one_way_row(m, ow, width1), [main_bar, temp_bar], "ow")
+    add_to_schedule(lambda m: one_way_row(m, ow, width1), [main_bar], "ow")
 
 # ---------------- Two-way
 with tab2:
@@ -469,7 +471,8 @@ with tab2:
         st.subheader("น้ำหนักบรรทุก")
         sdl2 = st.number_input("SDL (kg/m²)", 0.0, 2000.0, 100.0, 10.0, key="tw_sdl")
         ll2 = st.number_input("LL (kg/m²)", 0.0, 2000.0, 200.0, 10.0, key="tw_ll")
-        bar2 = st.selectbox("เหล็กเสริม", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="tw_bar")
+        bar2 = st.selectbox("ขนาดเหล็กเสริม", BAR_NAMES, index=BAR_NAMES.index("DB12"), key="tw_bar")
+        st.caption("ใช้ขนาดเดียวทั้งแผ่น")
     with c3:
         st.subheader("ความต่อเนื่องของขอบ")
         e1 = st.checkbox("ขอบ 1 (ซ้าย, ยาวตามแนว Y) ต่อเนื่อง", True)
@@ -570,7 +573,7 @@ $$R_n = \frac{M_u}{\phi b d^2}, \qquad
 ### พื้นทางเดียว — ACI approximate coefficients
 | เงื่อนไข | h,min | +M | −M |
 |---|---|---|---|
-| Simply supported | L/20 | wL²/8 | — |
+| Simply supported | L/20 | wL²/8 | wL²/24 ที่ขอบ (เหล็กบนควบคุมรอยร้าว) |
 | One end continuous (> 2 ช่วง) | L/24 | wL²/11 | wL²/10 (ภายใน), wL²/24 (ริม) |
 | One end continuous (2 ช่วง) | L/24 | wL²/11 | wL²/9 (ภายใน), wL²/24 (ริม) |
 | Both ends continuous | L/28 | wL²/16 | wL²/11 |

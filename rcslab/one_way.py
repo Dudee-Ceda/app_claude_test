@@ -13,18 +13,21 @@ class OneWaySupport:
     h_div: float  # ACI 318 Table 9.5(a): h_min = L / h_div
     pos: float  # +M = wL² / pos  (0 = none)
     neg_cont: float  # -M at continuous support = wL² / neg_cont
-    neg_disc: float  # -M at discontinuous (integral) support
+    neg_disc: float  # -M at discontinuous (integral) support; top bars for crack control
     shear: float  # Vu = shear · wL / 2
+    n_cont: int  # number of continuous (or fixed) supports
+    n_disc: int  # number of discontinuous supports
 
 
 ONE_WAY_SUPPORTS: dict[str, OneWaySupport] = {
-    "ช่วงเดียว วางบนที่รองรับธรรมดา (Simply supported)": OneWaySupport("simple", 20, 8, 0, 0, 1.0),
+    # simple span: +M = wL²/8 unchanged; top bars at both ends for -M = wL²/24 (edge cast with the beam)
+    "ช่วงเดียว วางบนที่รองรับธรรมดา (Simply supported)": OneWaySupport("simple", 20, 8, 0, 24, 1.0, 0, 2),
     "ต่อเนื่องปลายเดียว — ช่วงริม, มากกว่า 2 ช่วง (One end continuous)": OneWaySupport(
-        "one_end", 24, 11, 10, 24, 1.15
+        "one_end", 24, 11, 10, 24, 1.15, 1, 1
     ),
-    "ต่อเนื่องปลายเดียว — 2 ช่วง (Two spans)": OneWaySupport("one_end_2", 24, 11, 9, 24, 1.15),
-    "ต่อเนื่องสองปลาย (Both ends continuous)": OneWaySupport("both_ends", 28, 16, 11, 0, 1.0),
-    "พื้นยื่น (Cantilever)": OneWaySupport("cantilever", 10, 0, 2, 0, 2.0),
+    "ต่อเนื่องปลายเดียว — 2 ช่วง (Two spans)": OneWaySupport("one_end_2", 24, 11, 9, 24, 1.15, 1, 1),
+    "ต่อเนื่องสองปลาย (Both ends continuous)": OneWaySupport("both_ends", 28, 16, 11, 0, 1.0, 2, 0),
+    "พื้นยื่น (Cantilever)": OneWaySupport("cantilever", 10, 0, 2, 0, 2.0, 1, 0),
 }
 
 
@@ -36,8 +39,7 @@ class OneWayInput:
     sdl: float  # kg/m², superimposed dead load
     ll: float  # kg/m²
     cover: float = 2.0  # cm
-    main_bar: str = "DB12"
-    temp_bar: str = "RB9"
+    main_bar: str = "DB12"  # one bar size for the whole slab (main and temperature bars)
     p_end: float = 0.0  # kg/m, dead line load at the free end (cantilever only)
     xi: float = 2.0  # long-term deflection factor (ACI: 2.0 for ≥ 5 years)
 
@@ -94,7 +96,7 @@ def design_one_way(inp: OneWayInput, conc: Concrete, steel: Steel, code: DesignC
     flexure = [
         design_flexure(k, m, d, inp.h, inp.main_bar, s_max, conc, steel, code) for k, m in moments.items()
     ]
-    temp = design_flexure("เหล็กกันร้าว (Temp.)", 0.0, d, inp.h, inp.temp_bar, s_temp, conc, steel, code)
+    temp = design_flexure("เหล็กกันร้าว (Temp.)", 0.0, d, inp.h, inp.main_bar, s_temp, conc, steel, code)
 
     Vu = sup.shear * wu * L / 2 + p_u
     shear = check_shear(Vu, d, conc, code)
@@ -123,6 +125,8 @@ def design_one_way(inp: OneWayInput, conc: Concrete, steel: Steel, code: DesignC
         notes.append("กำลังรับแรงเฉือนไม่พอ — เพิ่มความหนาพื้น")
     if not deflection.ok:
         notes.append("การแอ่นตัวเกินเกณฑ์ L/360 หรือ L/240")
+    if sup.name == "simple":
+        notes.append("ที่รองรับไม่ต่อเนื่องใส่เหล็กบนรับ −M = wL²/24 (ขอบหล่อติดคาน) เพื่อควบคุมรอยร้าว")
     if cantilever:
         notes.append("พื้นยื่น: เกณฑ์การแอ่นตัวเทียบกับช่วงเทียบเท่า 2L; เหล็กหลักอยู่บน ต้องยึดฝังเข้าช่วงในอย่างน้อย L")
     return OneWayResult(inp, sw, wd, wu, h_min, h_ok, d, moments, flexure, temp, shear, deflection, notes)

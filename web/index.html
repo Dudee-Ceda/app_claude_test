@@ -132,6 +132,7 @@ button.ghost:hover { color: var(--ng); border-color: var(--ng); }
 button.ghost.armed { color: var(--sheet); background: var(--ng); border-color: var(--ng); }
 ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
 .empty { color: var(--muted); padding: 18px 4px; }
+.hint { font-size: 12px; color: var(--muted); margin-top: -4px; }
 .disclaimer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
 @media (prefers-reduced-motion: no-preference) { .verdict, .metric b { transition: color .2s, background .2s; } }
 </style>
@@ -182,8 +183,8 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
           <select id="ow_xi"><option value="2">≥ 5 ปี (ξ = 2.0)</option><option value="1.4">12 เดือน (ξ = 1.4)</option><option value="1.2">6 เดือน (ξ = 1.2)</option><option value="1">3 เดือน (ξ = 1.0)</option></select></label>
       </fieldset>
       <fieldset><h3>เหล็กเสริม</h3>
-        <label class="f">เหล็กเสริมหลัก <select id="ow_bar"></select></label>
-        <label class="f">เหล็กกันร้าว <select id="ow_tbar"></select></label>
+        <label class="f">ขนาดเหล็กเสริม <select id="ow_bar"></select></label>
+        <small class="hint">ใช้ขนาดเดียวทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว</small>
       </fieldset>
     </form>
     <div class="sheet"><div class="sheet" id="out-ow"></div>
@@ -203,7 +204,8 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
       <fieldset><h3>น้ำหนักบรรทุก</h3>
         <label class="f">SDL (kg/m²) <input id="tw_sdl" type="number" min="0" max="2000" step="10" value="100"></label>
         <label class="f">LL (kg/m²) <input id="tw_ll" type="number" min="0" max="2000" step="10" value="200"></label>
-        <label class="f">เหล็กเสริม <select id="tw_bar"></select></label>
+        <label class="f">ขนาดเหล็กเสริม <select id="tw_bar"></select></label>
+        <small class="hint">ใช้ขนาดเดียวทั้งแผ่น</small>
       </fieldset>
       <fieldset><h3>ขอบที่ต่อเนื่อง</h3>
         <label class="chk"><input id="tw_e1" type="checkbox" checked> ขอบ 1 · ซ้าย (ยาวตามแนว Y)</label>
@@ -239,7 +241,7 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
       <div class="tw"><table>
         <thead><tr><th>เงื่อนไข</th><th>h,min</th><th>+M</th><th>−M</th></tr></thead>
         <tbody>
-          <tr><td>ช่วงเดียว</td><td>L/20</td><td>wL²/8</td><td>—</td></tr>
+          <tr><td>ช่วงเดียว</td><td>L/20</td><td>wL²/8</td><td>wL²/24 ที่ขอบ (เหล็กบนควบคุมรอยร้าว)</td></tr>
           <tr><td>ต่อเนื่องปลายเดียว (&gt; 2 ช่วง)</td><td>L/24</td><td>wL²/11</td><td>wL²/10 ภายใน, wL²/24 ริม</td></tr>
           <tr><td>ต่อเนื่องปลายเดียว (2 ช่วง)</td><td>L/24</td><td>wL²/11</td><td>wL²/9 ภายใน, wL²/24 ริม</td></tr>
           <tr><td>ต่อเนื่องสองปลาย</td><td>L/28</td><td>wL²/16</td><td>wL²/11</td></tr>
@@ -357,11 +359,12 @@ const RC = (() => {
 
   // ---------------- one-way
   const ONE_WAY = {
-    simple: { label: "ช่วงเดียว วางบนที่รองรับธรรมดา", hDiv: 20, pos: 8, negCont: 0, negDisc: 0, shear: 1.0 },
-    one_end: { label: "ต่อเนื่องปลายเดียว — ช่วงริม, มากกว่า 2 ช่วง", hDiv: 24, pos: 11, negCont: 10, negDisc: 24, shear: 1.15 },
-    one_end_2: { label: "ต่อเนื่องปลายเดียว — 2 ช่วง", hDiv: 24, pos: 11, negCont: 9, negDisc: 24, shear: 1.15 },
-    both_ends: { label: "ต่อเนื่องสองปลาย", hDiv: 28, pos: 16, negCont: 11, negDisc: 0, shear: 1.0 },
-    cantilever: { label: "พื้นยื่น (Cantilever)", hDiv: 10, pos: 0, negCont: 2, negDisc: 0, shear: 2.0 },
+    // simple span: +M = wL²/8 unchanged; top bars at both ends for -M = wL²/24 (edge cast with the beam)
+    simple: { label: "ช่วงเดียว วางบนที่รองรับธรรมดา", hDiv: 20, pos: 8, negCont: 0, negDisc: 24, shear: 1.0, nCont: 0, nDisc: 2 },
+    one_end: { label: "ต่อเนื่องปลายเดียว — ช่วงริม, มากกว่า 2 ช่วง", hDiv: 24, pos: 11, negCont: 10, negDisc: 24, shear: 1.15, nCont: 1, nDisc: 1 },
+    one_end_2: { label: "ต่อเนื่องปลายเดียว — 2 ช่วง", hDiv: 24, pos: 11, negCont: 9, negDisc: 24, shear: 1.15, nCont: 1, nDisc: 1 },
+    both_ends: { label: "ต่อเนื่องสองปลาย", hDiv: 28, pos: 16, negCont: 11, negDisc: 0, shear: 1.0, nCont: 2, nDisc: 0 },
+    cantilever: { label: "พื้นยื่น (Cantilever)", hDiv: 10, pos: 0, negCont: 2, negDisc: 0, shear: 2.0, nCont: 1, nDisc: 0 },
   };
   function designOneWay(inp, c, s, code) {
     const sup = ONE_WAY[inp.support], L = inp.span;
@@ -376,7 +379,7 @@ const RC = (() => {
     if (sup.negCont) moments.push([cant ? "-M ที่ยึดแน่น" : "-M ที่รองรับต่อเนื่อง", wu * L * L / sup.negCont + pu * L]);
     if (sup.negDisc) moments.push(["-M ที่รองรับไม่ต่อเนื่อง", wu * L * L / sup.negDisc]);
     const flexure = moments.map(([k, m]) => designFlexure(k, m, d, inp.h, inp.mainBar, sMax, c, s, code));
-    const temp = designFlexure("เหล็กกันร้าว (Temp.)", 0, d, inp.h, inp.tempBar, sTemp, c, s, code);
+    const temp = designFlexure("เหล็กกันร้าว (Temp.)", 0, d, inp.h, inp.mainBar, sTemp, c, s, code);
     const shear = checkShear(sup.shear * wu * L / 2 + pu, d, c, code);
     const crit = flexure[0];
     const deflection = oneWayDeflection(inp.support === "one_end_2" ? "one_end" : inp.support, L, inp.h, d, crit.AsProv,
@@ -386,6 +389,7 @@ const RC = (() => {
       (deflection.ok ? "การแอ่นตัวอยู่ในเกณฑ์ จึงใช้ได้" : "การแอ่นตัวเกินเกณฑ์ — เพิ่มความหนา"));
     if (!shear.ok) notes.push("กำลังรับแรงเฉือนไม่พอ — เพิ่มความหนาพื้น");
     if (!deflection.ok) notes.push("การแอ่นตัวเกินเกณฑ์ L/360 หรือ L/240");
+    if (inp.support === "simple") notes.push("ที่รองรับไม่ต่อเนื่องใส่เหล็กบนรับ −M = wL²/24 (ขอบหล่อติดคาน) เพื่อควบคุมรอยร้าว");
     if (cant) notes.push("พื้นยื่น: เกณฑ์การแอ่นตัวเทียบกับช่วงเทียบเท่า 2L; เหล็กหลักอยู่บน ต้องยึดฝังเข้าช่วงในอย่างน้อย L");
     const ok = (hOk || deflection.ok) && shear.ok && flexure.every(f => f.ok) && temp.ok;
     return { inp, sup, sw, wd, wu, pu, hMin, hOk, d, moments, flexure, temp, shear, deflection, notes, ok };
@@ -456,8 +460,8 @@ const RC = (() => {
   // ---------------- BOQ
   const DENS = 0.785, EMBED = 0.10, ANCHOR = 0.15, TOP_EXT = 0.30;
   const countBars = (w, sp) => Math.floor(w * 100 / sp + 1e-9) + 1;
-  const item = (desc, f, run, len) => {
-    const count = countBars(run, f.spacing), total = count * len;
+  const item = (desc, f, run, len, sides = 1) => {
+    const count = sides * countBars(run, f.spacing), total = count * len;
     return { desc, bar: f.bar, spacing: f.spacing, count, length: len, total, weight: total * BARS[f.bar][1] * DENS };
   };
   function summarize(area, h, waste, items) {
@@ -467,14 +471,23 @@ const RC = (() => {
     return { area, h, waste, items, concrete: conc, formwork: area, net, total, byBar, ratio: conc ? total / conc : 0 };
   }
   function oneWayBoq(r, width, waste) {
-    const L = r.inp.span, items = [], by = Object.fromEntries(r.flexure.map(f => [f.label, f]));
-    if (r.inp.support === "cantilever") items.push(item("เหล็กบน (หลัก) พื้นยื่น", by["-M ที่ยึดแน่น"], width, 2 * L));
-    else {
-      items.push(item("เหล็กล่าง (หลัก)", by["+M กลางช่วง"], width, L + 2 * EMBED));
-      for (const lb of ["-M ที่รองรับต่อเนื่อง", "-M ที่รองรับไม่ต่อเนื่อง"])
-        if (by[lb]) items.push(item("เหล็กบน " + lb.slice(3), by[lb], width, TOP_EXT * L + ANCHOR));
+    const L = r.inp.span, items = [], by = Object.fromEntries(r.flexure.map(f => [f.label, f])), temp = r.temp, sup = r.sup;
+    if (r.inp.support === "cantilever") {
+      items.push(item("เหล็กบน (หลัก) พื้นยื่น", by["-M ที่ยึดแน่น"], width, 2 * L));
+      items.push(item("เหล็กกันร้าวบน (ใต้เหล็กหลัก)", temp, 2 * L, width));
+      items.push(item("เหล็กล่างทิศทางสั้น (กันร้าว)", temp, width, L + EMBED));
+      items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
+      return summarize(L * width, r.inp.h, waste, items);
     }
-    items.push(item("เหล็กกันร้าว", r.temp, L, width));
+    const ext = TOP_EXT * L + ANCHOR;
+    items.push(item("เหล็กล่าง (หลัก)", by["+M กลางช่วง"], width, L + 2 * EMBED));
+    items.push(item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width));
+    for (const [lb, sides] of [["-M ที่รองรับต่อเนื่อง", sup.nCont], ["-M ที่รองรับไม่ต่อเนื่อง", sup.nDisc]]) {
+      if (!by[lb] || !sides) continue;
+      const where = lb.slice(3) + (sides > 1 ? ` (${sides} ด้าน)` : "");
+      items.push(item("เหล็กบน " + where, by[lb], width, ext, sides));
+      items.push(item("เหล็กกันร้าวบน " + where, temp, TOP_EXT * L, width, sides));
+    }
     return summarize(L * width, r.inp.h, waste, items);
   }
   function twoWayBoq(r, waste) {
@@ -502,12 +515,14 @@ const RC = (() => {
     const i = r.inp, temp = drawingCallout(r.temp.bar, r.temp.spacing);
     if (i.support === "cantilever")
       return { mark, kind: "พื้นยื่น", t: (i.h / 100).toFixed(2), size: `ยื่น ${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
-        short_bot: NONE, short_top_cont: co(r.flexure, "-M ที่ยึดแน่น"), short_top_disc: NONE, long_bot: temp, long_top_cont: temp, long_top_disc: NONE,
-        remark: "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น" + (i.pEnd ? `, P ปลาย ${i.pEnd.toFixed(0)} kg/m` : ""), ok: r.ok, bars: [i.mainBar, i.tempBar] };
+        short_bot: temp, short_top_cont: co(r.flexure, "-M ที่ยึดแน่น"), short_top_disc: NONE, long_bot: temp, long_top_cont: temp, long_top_disc: NONE,
+        remark: "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น; เหล็กล่างเป็นเหล็กกันร้าว" + (i.pEnd ? `; P ปลาย ${i.pEnd.toFixed(0)} kg/m` : ""), ok: r.ok, bars: [i.mainBar] };
     const remark = { simple: "ช่วงเดียว", one_end: "ต่อเนื่องปลายเดียว", one_end_2: "ต่อเนื่องปลายเดียว (2 ช่วง)", both_ends: "ต่อเนื่องสองปลาย" }[i.support];
+    const topCont = co(r.flexure, "-M ที่รองรับต่อเนื่อง"), topDisc = co(r.flexure, "-M ที่รองรับไม่ต่อเนื่อง");
     return { mark, kind: "ทางเดียว", t: (i.h / 100).toFixed(2), size: `${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
-      short_bot: co(r.flexure, "+M"), short_top_cont: co(r.flexure, "-M ที่รองรับต่อเนื่อง"), short_top_disc: co(r.flexure, "-M ที่รองรับไม่ต่อเนื่อง"),
-      long_bot: temp, long_top_cont: NONE, long_top_disc: NONE, remark: remark + "; ทิศทางยาว = เหล็กกันร้าว", ok: r.ok, bars: [i.mainBar, i.tempBar] };
+      short_bot: co(r.flexure, "+M"), short_top_cont: topCont, short_top_disc: topDisc,
+      long_bot: temp, long_top_cont: topCont !== NONE ? temp : NONE, long_top_disc: topDisc !== NONE ? temp : NONE,
+      remark: remark + "; ทิศทางยาว = เหล็กกันร้าว (บนวางใต้เหล็กบนทิศทางสั้น)", ok: r.ok, bars: [i.mainBar] };
   }
   function twoWayRow(mark, r) {
     const i = r.inp;
@@ -527,6 +542,9 @@ const RC = (() => {
       `ระยะทาบเหล็ก: ${laps} (RB ต้องงอขอ)`,
       "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 3t, 0.45 m และต้องไม่น้อยกว่า As,min",
       "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
+      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว",
+      "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
+      "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
     ];
   }
   const SCHEDULE_COLUMNS = { mark: "พื้น", kind: "ประเภท", t: "หนา (m)", size: "ขนาด (m)", load: "SDL / LL (kg/m²)",
@@ -555,7 +573,7 @@ if (typeof module !== "undefined") module.exports = RC;
   fill("grade", Object.keys(RC.STEEL_GRADES).map((g) => [g, `${g} (fy = ${RC.STEEL_GRADES[g].toLocaleString()} ksc)`]), "SD40");
   fill("ow_sup", Object.entries(RC.ONE_WAY).map(([k, s]) => [k, s.label]), "simple");
   const bars = Object.keys(RC.BARS).map((b) => [b, b]);
-  fill("ow_bar", bars, "DB12"); fill("ow_tbar", bars, "RB9"); fill("tw_bar", bars, "DB12");
+  fill("ow_bar", bars, "DB12"); fill("tw_bar", bars, "DB12");
 
   // ---- tabs (bare #token deep links)
   const tabs = ["ow", "tw", "sc", "th"];
@@ -633,6 +651,7 @@ if (typeof module !== "undefined") module.exports = RC;
     else {
       let ml = sup.negDisc ? w * L * L / sup.negDisc : 0, mr = sup.negCont ? w * L * L / sup.negCont : 0;
       if (r.inp.support === "both_ends") ml = mr;
+      if (r.inp.support === "simple") ml = mr = 0; // top bars at simple ends are for crack control only
       const mp = w * L * L / sup.pos, a = (-ml - mr - 2 * mp) * 2 / (L * L), b = (ml - mr) / L - a * L;
       ys = xs.map((x) => a * x * x + b * x - ml);
     }
@@ -684,7 +703,7 @@ if (typeof module !== "undefined") module.exports = RC;
     const support = $("ow_sup").value;
     $("ow_P_wrap").hidden = support !== "cantilever";
     const inp = { span: val("ow_L") || 3, h: val("ow_h") || 15, support, sdl: val("ow_sdl") || 0, ll: val("ow_ll") || 0, cover: g.cover,
-      mainBar: $("ow_bar").value, tempBar: $("ow_tbar").value, pEnd: support === "cantilever" ? (val("ow_P") || 0) : 0, xi: val("ow_xi") };
+      mainBar: $("ow_bar").value, pEnd: support === "cantilever" ? (val("ow_P") || 0) : 0, xi: val("ow_xi") };
     const r = RC.designOneWay(inp, g.c, g.s, g.code), q = RC.oneWayBoq(r, val("ow_W") || 1, g.waste), df = r.deflection;
     last.ow = () => RC.oneWayRow(markOf("ow"), r, val("ow_W") || 1);
     const md = [

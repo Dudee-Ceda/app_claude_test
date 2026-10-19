@@ -68,9 +68,10 @@ def one_way_row(mark: str, res: OneWayResult, width: float) -> ScheduleRow:
     if name == "cantilever":
         return ScheduleRow(
             mark, "พื้นยื่น", f"{inp.h / 100:.2f}", f"ยื่น {inp.span:.2f} × {width:.2f}", f"{inp.sdl:.0f} / {inp.ll:.0f}",
-            NONE, _callout(res.flexure, "-M ที่ยึดแน่น"), NONE,
+            temp, _callout(res.flexure, "-M ที่ยึดแน่น"), NONE,
             temp, temp, NONE,
-            "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น" + (f", P ปลาย {inp.p_end:.0f} kg/m" if inp.p_end else ""),
+            "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น; เหล็กล่างเป็นเหล็กกันร้าว"
+            + (f"; P ปลาย {inp.p_end:.0f} kg/m" if inp.p_end else ""),
             res.ok,
         )
     remark = {
@@ -79,11 +80,13 @@ def one_way_row(mark: str, res: OneWayResult, width: float) -> ScheduleRow:
         "one_end_2": "ต่อเนื่องปลายเดียว (2 ช่วง)",
         "both_ends": "ต่อเนื่องสองปลาย",
     }[name]
+    top_cont = _callout(res.flexure, "-M ที่รองรับต่อเนื่อง")
+    top_disc = _callout(res.flexure, "-M ที่รองรับไม่ต่อเนื่อง")
     return ScheduleRow(
         mark, "ทางเดียว", f"{inp.h / 100:.2f}", f"{inp.span:.2f} × {width:.2f}", f"{inp.sdl:.0f} / {inp.ll:.0f}",
-        _callout(res.flexure, "+M"), _callout(res.flexure, "-M ที่รองรับต่อเนื่อง"),
-        _callout(res.flexure, "-M ที่รองรับไม่ต่อเนื่อง"),
-        temp, NONE, NONE, remark + "; ทิศทางยาว = เหล็กกันร้าว", res.ok,
+        _callout(res.flexure, "+M"), top_cont, top_disc,
+        temp, temp if top_cont != NONE else NONE, temp if top_disc != NONE else NONE,
+        remark + "; ทิศทางยาว = เหล็กกันร้าว (บนวางใต้เหล็กบนทิศทางสั้น)", res.ok,
     )
 
 
@@ -116,4 +119,7 @@ def schedule_notes(fc: float, grade: str, cover: float, bars: list[str]) -> list
         f"ระยะทาบเหล็ก: {laps} (RB ต้องงอขอ)",
         "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 3t, 0.45 m และต้องไม่น้อยกว่า As,min",
         "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
+        "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว",
+        "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
+        "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
     ]

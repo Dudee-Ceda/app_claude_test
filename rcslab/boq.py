@@ -77,8 +77,8 @@ def count_bars(width_m: float, spacing_cm: float) -> int:
     return math.floor(width_m * 100 / spacing_cm + 1e-9) + 1
 
 
-def _item(desc: str, f: FlexureResult, run_width: float, length: float) -> BarItem:
-    return BarItem(desc, f.bar, f.spacing, count_bars(run_width, f.spacing), length)
+def _item(desc: str, f: FlexureResult, run_width: float, length: float, sides: int = 1) -> BarItem:
+    return BarItem(desc, f.bar, f.spacing, sides * count_bars(run_width, f.spacing), length)
 
 
 def one_way_boq(res: OneWayResult, width: float, waste: float = 0.05) -> BOQ:
@@ -87,18 +87,21 @@ def one_way_boq(res: OneWayResult, width: float, waste: float = 0.05) -> BOQ:
     sup = ONE_WAY_SUPPORTS[res.inp.support]
     boq = BOQ(area=L * width, h=res.inp.h, waste=waste)
     by_label = {f.label: f for f in res.flexure}
+    temp = res.temp
     if sup.name == "cantilever":
-        f = by_label["-M ที่ยึดแน่น"]
-        boq.items.append(_item("เหล็กบน (หลัก) พื้นยื่น", f, width, 2 * L))
-    else:
-        f = by_label["+M กลางช่วง"]
-        boq.items.append(_item("เหล็กล่าง (หลัก)", f, width, L + 2 * EMBED))
-        for label in ("-M ที่รองรับต่อเนื่อง", "-M ที่รองรับไม่ต่อเนื่อง"):
-            if label in by_label:
-                boq.items.append(
-                    _item(f"เหล็กบน {label[3:]}", by_label[label], width, TOP_EXT * L + ANCHOR)
-                )
-    boq.items.append(_item("เหล็กกันร้าว", res.temp, L, width))
+        boq.items.append(_item("เหล็กบน (หลัก) พื้นยื่น", by_label["-M ที่ยึดแน่น"], width, 2 * L))
+        boq.items.append(_item("เหล็กกันร้าวบน (ใต้เหล็กหลัก)", temp, 2 * L, width))
+        boq.items.append(_item("เหล็กล่างทิศทางสั้น (กันร้าว)", temp, width, L + EMBED))
+        boq.items.append(_item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width))
+        return boq
+    ext = TOP_EXT * L + ANCHOR
+    boq.items.append(_item("เหล็กล่าง (หลัก)", by_label["+M กลางช่วง"], width, L + 2 * EMBED))
+    boq.items.append(_item("เหล็กล่างทิศทางยาว (กันร้าว)", temp, L, width))
+    for label, sides in (("-M ที่รองรับต่อเนื่อง", sup.n_cont), ("-M ที่รองรับไม่ต่อเนื่อง", sup.n_disc)):
+        if label in by_label and sides:
+            where = label[3:] + (f" ({sides} ด้าน)" if sides > 1 else "")
+            boq.items.append(_item(f"เหล็กบน {where}", by_label[label], width, ext, sides))
+            boq.items.append(_item(f"เหล็กกันร้าวบน {where}", temp, TOP_EXT * L, width, sides))
     return boq
 
 

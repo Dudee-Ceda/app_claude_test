@@ -166,9 +166,28 @@ def test_schedule_rows():
     assert row.short_top_disc == NONE and row.long_top_cont != NONE and row.long_top_disc != NONE
     ow = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
     r1 = one_way_row("S2", ow, 4.0)
-    assert r1.short_top_cont == NONE and r1.long_bot == drawing_callout(ow.temp.bar, ow.temp.spacing)
+    temp = drawing_callout(ow.temp.bar, ow.temp.spacing)
+    # simple span: top bars at both discontinuous ends, distribution bars under them, one bar size throughout
+    assert r1.short_top_cont == NONE and r1.short_top_disc.startswith("DB12@")
+    assert r1.long_bot == temp and r1.long_top_disc == temp and r1.long_top_cont == NONE
     rc = one_way_row("S3", design_one_way(OneWayInput(1.2, 15, CANT, 100, 200), CONC, SD40, CODE), 3.0)
-    assert rc.short_bot == NONE and rc.short_top_cont.startswith("DB12@")
+    assert rc.short_bot.startswith("DB12@") and rc.short_top_cont.startswith("DB12@")
+
+
+def test_one_bar_size_per_slab():
+    for sup in ONE_WAY_SUPPORTS:
+        res = design_one_way(OneWayInput(2.0, 15, sup, 100, 200, main_bar="DB10"), CONC, SD40, CODE)
+        assert {f.bar for f in res.flexure + [res.temp]} == {"DB10"}
+        assert {i.bar for i in one_way_boq(res, 3.0).items} == {"DB10"}
+
+
+def test_one_way_boq_counts_every_support():
+    both = next(k for k, v in ONE_WAY_SUPPORTS.items() if v.name == "both_ends")
+    res = design_one_way(OneWayInput(3.0, 12, both, 100, 200), CONC, SD40, CODE)
+    top = next(i for i in one_way_boq(res, 4.0).items if i.description.startswith("เหล็กบน"))
+    assert top.count == 2 * (math.floor(400 / top.spacing) + 1)  # two continuous supports
+    res = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
+    assert any("ไม่ต่อเนื่อง (2 ด้าน)" in i.description for i in one_way_boq(res, 4.0).items)
 
 
 def test_drawing_callout():

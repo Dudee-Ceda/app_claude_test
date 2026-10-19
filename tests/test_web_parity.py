@@ -39,7 +39,7 @@ def run_js(payload: dict) -> dict:
 const P = JSON.parse(process.argv[1]); const out = { ow: [], tw: [] };
 for (const [sup, L, h, sdl, ll, P_, code, fc, fy] of P.ow) {
   const c = RC.concrete(fc), s = RC.steel(fy);
-  const r = RC.designOneWay({ span: L, h, support: sup, sdl, ll, cover: 2, mainBar: "DB12", tempBar: "RB9", pEnd: P_, xi: 2 }, c, s, RC.CODES[code]);
+  const r = RC.designOneWay({ span: L, h, support: sup, sdl, ll, cover: 2, mainBar: "DB12", pEnd: P_, xi: 2 }, c, s, RC.CODES[code]);
   const q = RC.oneWayBoq(r, 4, 0.07);
   out.ow.push({ wu: r.wu, hMin: r.hMin, Mu: r.flexure.map(f => f.Mu), sp: r.flexure.map(f => f.spacing), tsp: r.temp.spacing,
     Vu: r.shear.Vu, dL: r.deflection.dL, dLong: r.deflection.dLong, ok: r.ok, steel: q.total });
@@ -63,7 +63,7 @@ def test_js_engine_matches_python():
     for case, got in zip(ONE_WAY_CASES, js["ow"]):
         sup, L, h, sdl, ll, p, code, fc, fy = case
         r = design_one_way(
-            OneWayInput(L, h, SUPPORT_KEYS[sup], sdl, ll, 2.0, "DB12", "RB9", p, 2.0),
+            OneWayInput(L, h, SUPPORT_KEYS[sup], sdl, ll, 2.0, "DB12", p, 2.0),
             Concrete(fc), Steel(fy), CODES[CODE_KEYS[code]],
         )
         assert got["wu"] == pytest.approx(r.wu)
@@ -99,7 +99,7 @@ def test_js_schedule_rows_match_python():
 const P = JSON.parse(process.argv[1]); const out = [];
 const c = RC.concrete(240), s = RC.steel(4000), code = RC.CODES.eit;
 for (const [sup, L, h, p] of P.ow) {
-  const r = RC.designOneWay({ span: L, h, support: sup, sdl: 100, ll: 300, cover: 2, mainBar: "DB12", tempBar: "RB9", pEnd: p, xi: 2 }, c, s, code);
+  const r = RC.designOneWay({ span: L, h, support: sup, sdl: 100, ll: 300, cover: 2, mainBar: "DB12", pEnd: p, xi: 2 }, c, s, code);
   out.push(RC.oneWayRow("S", r, 4));
 }
 for (const [x, y, e1, e2, e3, e4] of P.tw) {
@@ -114,7 +114,7 @@ console.log(JSON.stringify(out));
     js = json.loads(res.stdout)
     conc, steel, code = Concrete(240), Steel(4000), CODES[CODE_KEYS["eit"]]
     py = [
-        one_way_row("S", design_one_way(OneWayInput(L, h, SUPPORT_KEYS[sup], 100, 300, 2.0, "DB12", "RB9", p), conc, steel, code), 4)
+        one_way_row("S", design_one_way(OneWayInput(L, h, SUPPORT_KEYS[sup], 100, 300, 2.0, "DB12", p), conc, steel, code), 4)
         for sup, L, h, p in ow
     ] + [
         two_way_row("S", design_two_way(TwoWayInput(x, y, 12, 100, 300, *edges, 2.0, "DB12"), conc, steel, code))
