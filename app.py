@@ -1,5 +1,7 @@
 """RC Slab Design — Streamlit app for reinforced concrete slab design (SDM)."""
 
+import re
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -10,6 +12,7 @@ from rcslab.flexure import FlexureResult, rho_max
 from rcslab.materials import STEEL_GRADES
 from rcslab.one_way import OneWayInput, OneWayResult, design_one_way
 from rcslab.report_pdf import markdown_to_pdf
+from rcslab.schedule import COLUMNS, PDF_COL_WIDTHS, one_way_row, schedule_notes, two_way_row
 from rcslab.two_way import CASE_NAMES, TwoWayInput, TwoWayResult, design_two_way
 
 st.set_page_config(page_title="RC Slab Design", page_icon="🏗️", layout="wide")
@@ -232,8 +235,8 @@ def boq_markdown(boq: BOQ) -> list[str]:
 
 
 @st.cache_data(show_spinner=False)
-def to_pdf(md: str) -> bytes:
-    return markdown_to_pdf(md)
+def to_pdf(md: str, landscape: bool = False, col_widths: tuple | None = None) -> bytes:
+    return markdown_to_pdf(md, landscape=landscape, table_font=8 if landscape else 9, col_widths=col_widths)
 
 
 def download_buttons(md: str, stem: str) -> None:
@@ -335,7 +338,58 @@ def report_two_way(res: TwoWayResult, boq: BOQ) -> str:
 st.title("RC Slab Design")
 st.caption("โปรแกรมออกแบบพื้นคอนกรีตเสริมเหล็ก · หน่วย: kg, cm, m, ksc")
 
-tab1, tab2, tab3 = st.tabs(["พื้นทางเดียว (One-way)", "พื้นสองทาง (Two-way)", "ทฤษฎี / อ้างอิง"])
+if "schedule" not in st.session_state:
+    st.session_state.schedule = {}  # mark -> schedule row dict
+
+
+def natural_key(mark: str):
+    return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", mark)]
+
+
+def next_mark() -> str:
+    n = 1
+    while f"S{n}" in st.session_state.schedule:
+        n += 1
+    return f"S{n}"
+
+
+def _save_row(row, bars: list[str], key: str) -> None:
+    mark = st.session_state[f"{key}_mark"].strip()
+    exists = mark in st.session_state.schedule
+    d = row(mark).as_dict()
+    d["_bars"] = bars
+    st.session_state.schedule[mark] = d
+    for k in ("ow", "tw"):  # both tabs move on to the next free mark
+        st.session_state[f"{k}_mark"] = next_mark()
+    st.toast(f"{'แทนที่' if exists else 'เพิ่ม'} {mark} ในตารางเหล็กพื้นแล้ว")
+
+
+def add_to_schedule(row, bars: list[str], key: str) -> None:
+    st.subheader("บันทึกลงตารางเหล็กพื้น")
+    if f"{key}_mark" not in st.session_state:
+        st.session_state[f"{key}_mark"] = next_mark()
+    c = st.columns([1, 2, 3])
+    mark = c[0].text_input("ชื่อพื้น (Mark)", key=f"{key}_mark").strip()
+    c[1].write("")
+    c[1].write("")
+    c[1].button("➕ เพิ่ม/แทนที่ในตาราง", key=f"{key}_add", disabled=not mark, on_click=_save_row,
+                args=(row, bars, key))
+    c[2].caption("ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม · ดูตารางทั้งหมดในแท็บ ตารางเหล็กพื้น")
+
+
+def schedule_markdown(rows: list[dict]) -> str:
+    keys = list(COLUMNS)
+    lines = ["# ตารางเหล็กพื้น (Slab Schedule)", "", f"- มาตรฐาน: {code_name}", "",
+             "| " + " | ".join(COLUMNS[k] for k in keys) + " |", "|" + "---|" * len(keys)]
+    lines += ["| " + " | ".join(str(r[k]) for k in keys) + " |" for r in rows]
+    bars = [b for r in rows for b in r["_bars"]]
+    lines += ["", "## หมายเหตุ", *[f"- {n}" for n in schedule_notes(fc, grade, cover, bars)]]
+    return "\n".join(lines)
+
+
+tab1, tab2, tab4, tab3 = st.tabs(
+    ["พื้นทางเดียว (One-way)", "พื้นสองทาง (Two-way)", "ตารางเหล็กพื้น", "ทฤษฎี / อ้างอิง"]
+)
 
 # ---------------- One-way
 with tab1:
@@ -400,6 +454,8 @@ with tab1:
     for n in ow.notes:
         st.info(n)
     download_buttons(report_one_way(ow, ow_boq), "rc_slab_one_way")
+    st.divider()
+    add_to_schedule(lambda m: one_way_row(m, ow, width1), [main_bar, temp_bar], "ow")
 
 # ---------------- Two-way
 with tab2:
@@ -458,6 +514,39 @@ with tab2:
         st.info(n)
     boq_section(tw_boq)
     download_buttons(report_two_way(tw, tw_boq), "rc_slab_two_way")
+    st.divider()
+    add_to_schedule(lambda m: two_way_row(m, tw), [bar2], "tw")
+
+# ---------------- Slab schedule
+with tab4:
+    st.subheader("ตารางเหล็กพื้น (Slab Schedule)")
+    rows = [st.session_state.schedule[k] for k in sorted(st.session_state.schedule, key=natural_key)]
+    if not rows:
+        st.info("ยังไม่มีรายการ ออกแบบพื้นในแท็บพื้นทางเดียวหรือพื้นสองทาง แล้วกด เพิ่ม/แทนที่ในตาราง")
+    else:
+        df = pd.DataFrame([{COLUMNS[k]: r[k] for k in COLUMNS} | {"สถานะ": status(r["ok"])} for r in rows])
+        st.dataframe(df, hide_index=True, width="stretch")
+        if not all(r["ok"] for r in rows):
+            st.warning("มีพื้นที่ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ")
+        st.markdown("**หมายเหตุสำหรับแบบ**")
+        for n in schedule_notes(fc, grade, cover, [b for r in rows for b in r["_bars"]]):
+            st.markdown(f"- {n}")
+        md = schedule_markdown(rows)
+        csv = df.drop(columns="สถานะ").to_csv(index=False).encode("utf-8-sig")
+        c = st.columns([1, 1, 1, 2])
+        c[0].download_button("📊 Excel (.csv)", csv, "slab_schedule.csv", "text/csv")
+        c[1].download_button("🖨️ PDF (A4 แนวนอน)", to_pdf(md, landscape=True, col_widths=PDF_COL_WIDTHS), "slab_schedule.pdf", "application/pdf")
+        c[2].download_button("📄 Markdown", md, "slab_schedule.md", "text/markdown")
+        with st.expander("ลบรายการ"):
+            drop = st.multiselect("เลือกพื้นที่จะลบ", [r["mark"] for r in rows])
+            d1, d2 = st.columns(2)
+            if d1.button("ลบที่เลือก", disabled=not drop):
+                for m in drop:
+                    st.session_state.schedule.pop(m, None)
+                st.rerun()
+            if d2.button("ล้างตารางทั้งหมด"):
+                st.session_state.schedule = {}
+                st.rerun()
 
 # ---------------- Theory
 with tab3:

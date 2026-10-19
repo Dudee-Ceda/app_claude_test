@@ -46,15 +46,16 @@ class _PDF(FPDF):
         self.cell(0, 6, f"หน้า {self.page_no()}/{{nb}}", align="C")
 
 
-def _table(pdf: FPDF, rows: list[str]) -> None:
+def _table(pdf: FPDF, rows: list[str], font_size: float = 9, col_widths: tuple | None = None) -> None:
     cells = [[_clean(c.strip()) for c in r.strip().strip("|").split("|")] for r in rows]
     cells = [r for r in cells if not all(re.fullmatch(r":?-+:?", c) for c in r)]
-    pdf.set_font("Sarabun", "", 9)
+    pdf.set_font("Sarabun", "", font_size)
     with pdf.table(
         headings_style=FontFace(emphasis="BOLD", fill_color=(235, 238, 245)),
         line_height=5.5,
         text_align="LEFT",
         padding=1,
+        col_widths=col_widths if col_widths and len(col_widths) == len(cells[0]) else None,
     ) as table:
         for r in cells:
             row = table.row()
@@ -63,8 +64,8 @@ def _table(pdf: FPDF, rows: list[str]) -> None:
     pdf.ln(2)
 
 
-def markdown_to_pdf(md: str) -> bytes:
-    pdf = _PDF(format="A4")
+def markdown_to_pdf(md: str, landscape: bool = False, table_font: float = 9, col_widths: tuple | None = None) -> bytes:
+    pdf = _PDF(orientation="L" if landscape else "P", format="A4")
     pdf.add_font("Sarabun", "", FONT_DIR / "Sarabun-Regular.ttf")
     pdf.add_font("Sarabun", "B", FONT_DIR / "Sarabun-Bold.ttf")
     pdf.set_text_shaping(True)
@@ -81,7 +82,7 @@ def markdown_to_pdf(md: str) -> bytes:
             while i < len(lines) and lines[i].startswith("|"):
                 block.append(lines[i])
                 i += 1
-            _table(pdf, block)
+            _table(pdf, block, table_font, col_widths)
             continue
         text = _clean(line)
         if text.startswith("# "):

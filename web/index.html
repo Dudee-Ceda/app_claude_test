@@ -118,6 +118,20 @@ textarea.report { width: 100%; min-height: 220px; font-family: var(--font-mono);
 .theory h2 { font-size: 18px; margin-top: 8px; }
 .theory p, .theory li { max-width: 72ch; }
 .theory code { font-family: var(--font-mono); font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.addrow .actions { align-items: flex-end; }
+.addrow label.f { width: 140px; }
+.tabs .count { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+table.sched th { white-space: normal; vertical-align: bottom; min-width: 86px; }
+table.sched th.grp { text-align: center; border-bottom: 1px solid var(--muted); color: var(--fg); }
+table.sched td { white-space: nowrap; }
+table.sched td.bar { color: var(--fg); }
+table.sched td.note { white-space: normal; min-width: 200px; }
+table.sched td:first-child { min-width: 0; font-weight: 700; }
+button.ghost { font: inherit; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+button.ghost:hover { color: var(--ng); border-color: var(--ng); }
+button.ghost.armed { color: var(--sheet); background: var(--ng); border-color: var(--ng); }
+ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+.empty { color: var(--muted); padding: 18px 4px; }
 .disclaimer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
 @media (prefers-reduced-motion: no-preference) { .verdict, .metric b { transition: color .2s, background .2s; } }
 </style>
@@ -147,6 +161,7 @@ textarea.report { width: 100%; min-height: 220px; font-family: var(--font-mono);
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-ow" aria-selected="true" data-tab="ow">พื้นทางเดียว (One-way)</button>
     <button role="tab" id="tab-tw" aria-selected="false" data-tab="tw">พื้นสองทาง (Two-way)</button>
+    <button role="tab" id="tab-sc" aria-selected="false" data-tab="sc">ตารางเหล็กพื้น <span class="count" id="sc-count"></span></button>
     <button role="tab" id="tab-th" aria-selected="false" data-tab="th">ทฤษฎี / อ้างอิง</button>
   </nav>
 
@@ -171,7 +186,10 @@ textarea.report { width: 100%; min-height: 220px; font-family: var(--font-mono);
         <label class="f">เหล็กกันร้าว <select id="ow_tbar"></select></label>
       </fieldset>
     </form>
-    <div class="sheet" id="out-ow"></div>
+    <div class="sheet"><div class="sheet" id="out-ow"></div>
+      <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
+        <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="ow-mark" type="text" value="S1" maxlength="12"></label>
+          <button class="btn" type="button" id="ow-add">เพิ่ม/แทนที่ในตาราง</button><span id="ow-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
   </div>
 
   <!-- TWO-WAY -->
@@ -194,7 +212,15 @@ textarea.report { width: 100%; min-height: 220px; font-family: var(--font-mono);
         <label class="chk"><input id="tw_e4" type="checkbox" checked> ขอบ 4 · บน (ยาวตามแนว X)</label>
       </fieldset>
     </form>
-    <div class="sheet" id="out-tw"></div>
+    <div class="sheet"><div class="sheet" id="out-tw"></div>
+      <section class="block addrow"><h2>บันทึกลงตารางเหล็กพื้น</h2>
+        <div class="actions"><label class="f">ชื่อพื้น (Mark) <input id="tw-mark" type="text" value="S1" maxlength="12"></label>
+          <button class="btn" type="button" id="tw-add">เพิ่ม/แทนที่ในตาราง</button><span id="tw-add-msg">ใช้ชื่อเดิมเพื่อแทนที่แถวเดิม</span></div></section></div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div id="pane-sc" hidden>
+    <div class="sheet" id="out-sc"></div>
   </div>
 
   <!-- THEORY -->
@@ -463,8 +489,53 @@ const RC = (() => {
     return summarize(X * Y, r.inp.h, waste, items);
   }
 
+  // ---------------- slab schedule (ตารางเหล็กพื้น)
+  const NONE = "—";
+  function drawingCallout(bar, sp) {
+    let s = (sp / 100).toFixed(3).replace(/0+$/, "");
+    if (s.split(".")[1].length < 2) s += "0";
+    return `${bar}@${s}`;
+  }
+  const co = (fl, kind) => { const f = fl.find((x) => x.label.includes(kind)); return f ? drawingCallout(f.bar, f.spacing) : NONE; };
+  const ld = (i) => `${i.sdl.toFixed(0)} / ${i.ll.toFixed(0)}`;
+  function oneWayRow(mark, r, width) {
+    const i = r.inp, temp = drawingCallout(r.temp.bar, r.temp.spacing);
+    if (i.support === "cantilever")
+      return { mark, kind: "พื้นยื่น", t: (i.h / 100).toFixed(2), size: `ยื่น ${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
+        short_bot: NONE, short_top_cont: co(r.flexure, "-M ที่ยึดแน่น"), short_top_disc: NONE, long_bot: temp, long_top_cont: temp, long_top_disc: NONE,
+        remark: "เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวเท่าระยะยื่น" + (i.pEnd ? `, P ปลาย ${i.pEnd.toFixed(0)} kg/m` : ""), ok: r.ok, bars: [i.mainBar, i.tempBar] };
+    const remark = { simple: "ช่วงเดียว", one_end: "ต่อเนื่องปลายเดียว", one_end_2: "ต่อเนื่องปลายเดียว (2 ช่วง)", both_ends: "ต่อเนื่องสองปลาย" }[i.support];
+    return { mark, kind: "ทางเดียว", t: (i.h / 100).toFixed(2), size: `${i.span.toFixed(2)} × ${width.toFixed(2)}`, load: ld(i),
+      short_bot: co(r.flexure, "+M"), short_top_cont: co(r.flexure, "-M ที่รองรับต่อเนื่อง"), short_top_disc: co(r.flexure, "-M ที่รองรับไม่ต่อเนื่อง"),
+      long_bot: temp, long_top_cont: NONE, long_top_disc: NONE, remark: remark + "; ทิศทางยาว = เหล็กกันร้าว", ok: r.ok, bars: [i.mainBar, i.tempBar] };
+  }
+  function twoWayRow(mark, r) {
+    const i = r.inp;
+    return { mark, kind: "สองทาง", t: (i.h / 100).toFixed(2), size: `${r.S.toFixed(2)} × ${r.L.toFixed(2)}`, load: ld(i),
+      short_bot: co(r.fShort, "+M"), short_top_cont: co(r.fShort, "ขอบต่อเนื่อง"), short_top_disc: co(r.fShort, "ขอบไม่ต่อเนื่อง"),
+      long_bot: co(r.fLong, "+M"), long_top_cont: co(r.fLong, "ขอบต่อเนื่อง"), long_top_disc: co(r.fLong, "ขอบไม่ต่อเนื่อง"),
+      remark: `Case ${r.cs}, m = ${r.m.toFixed(2)}; เหล็กทิศทางยาววางชั้นใน`, ok: r.ok, bars: [i.bar] };
+  }
+  const lapLength = (bar) => Math.max(0.30, (bar.startsWith("RB") ? 48 : 40) * BARS[bar][0] / 100);
+  function scheduleNotes(fc, grade, cover, bars) {
+    const laps = [...new Set(bars)].sort((a, b) => BARS[a][0] - BARS[b][0]).map((b) => `${b} ≥ ${lapLength(b).toFixed(2)} m`).join(", ");
+    return [
+      `คอนกรีต f'c = ${fc.toFixed(0)} ksc (ทรงกระบอก), เหล็กเสริม ${grade}, ระยะหุ้มคอนกรีต ${cover.toFixed(1)} cm`,
+      "เหล็กล่างยาวตลอดช่วง ฝังเข้าคานอย่างน้อย 0.10 m",
+      "เหล็กบนยื่นจากขอบคาน 0.30L (L = ช่วงสั้นสำหรับพื้นสองทาง, ช่วงพื้นสำหรับพื้นทางเดียว)",
+      "พื้นสองทาง: เหล็กทิศทางสั้นวางชั้นนอก (ล่างสุด/บนสุด) เหล็กทิศทางยาววางชั้นใน",
+      `ระยะทาบเหล็ก: ${laps} (RB ต้องงอขอ)`,
+      "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 3t, 0.45 m และต้องไม่น้อยกว่า As,min",
+      "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
+    ];
+  }
+  const SCHEDULE_COLUMNS = { mark: "พื้น", kind: "ประเภท", t: "หนา (m)", size: "ขนาด (m)", load: "SDL / LL (kg/m²)",
+    short_bot: "ทิศทางสั้น: ล่าง", short_top_cont: "ทิศทางสั้น: บน ขอบต่อเนื่อง", short_top_disc: "ทิศทางสั้น: บน ขอบไม่ต่อเนื่อง",
+    long_bot: "ทิศทางยาว: ล่าง", long_top_cont: "ทิศทางยาว: บน ขอบต่อเนื่อง", long_top_disc: "ทิศทางยาว: บน ขอบไม่ต่อเนื่อง", remark: "หมายเหตุ" };
+
   return { BARS, STEEL_GRADES, CODES, ONE_WAY, CASE_NAMES, concrete, steel, rhoBal, rhoMax, designFlexure, coefficient,
-    crackedI, designOneWay, designTwoWay, oneWayBoq, twoWayBoq };
+    crackedI, designOneWay, designTwoWay, oneWayBoq, twoWayBoq,
+    drawingCallout, oneWayRow, twoWayRow, lapLength, scheduleNotes, SCHEDULE_COLUMNS };
 })();
 if (typeof module !== "undefined") module.exports = RC;
 </script>
@@ -487,7 +558,7 @@ if (typeof module !== "undefined") module.exports = RC;
   fill("ow_bar", bars, "DB12"); fill("ow_tbar", bars, "RB9"); fill("tw_bar", bars, "DB12");
 
   // ---- tabs (bare #token deep links)
-  const tabs = ["ow", "tw", "th"];
+  const tabs = ["ow", "tw", "sc", "th"];
   function show(t) {
     for (const k of tabs) { $("pane-" + k).hidden = k !== t; $("tab-" + k).setAttribute("aria-selected", String(k === t)); }
     try { localStorage.setItem("rcslab-tab", t); } catch (e) {}
@@ -615,6 +686,7 @@ if (typeof module !== "undefined") module.exports = RC;
     const inp = { span: val("ow_L") || 3, h: val("ow_h") || 15, support, sdl: val("ow_sdl") || 0, ll: val("ow_ll") || 0, cover: g.cover,
       mainBar: $("ow_bar").value, tempBar: $("ow_tbar").value, pEnd: support === "cantilever" ? (val("ow_P") || 0) : 0, xi: val("ow_xi") };
     const r = RC.designOneWay(inp, g.c, g.s, g.code), q = RC.oneWayBoq(r, val("ow_W") || 1, g.waste), df = r.deflection;
+    last.ow = () => RC.oneWayRow(markOf("ow"), r, val("ow_W") || 1);
     const md = [
       "# RC Slab Design — พื้นทางเดียว (One-way slab)", "",
       `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
@@ -664,6 +736,7 @@ if (typeof module !== "undefined") module.exports = RC;
     const inp = { x: val("tw_x") || 4, y: val("tw_y") || 5, h: val("tw_h") || 12, sdl: val("tw_sdl") || 0, ll: val("tw_ll") || 0,
       cover: g.cover, bar: $("tw_bar").value, e1: $("tw_e1").checked, e2: $("tw_e2").checked, e3: $("tw_e3").checked, e4: $("tw_e4").checked };
     const r = RC.designTwoWay(inp, g.c, g.s, g.code), q = RC.twoWayBoq(r, g.waste);
+    last.tw = () => RC.twoWayRow(markOf("tw"), r);
     const md = [
       "# RC Slab Design — พื้นสองทาง (Two-way slab, ACI 318-63 Method 2)", "",
       `- มาตรฐาน: ${g.code.name}`, `- f'c = ${g.c.fc} ksc, ${g.grade} fy = ${g.s.fy} ksc, cover = ${g.cover} cm`,
@@ -702,7 +775,91 @@ if (typeof module !== "undefined") module.exports = RC;
     wireCopy("tw-rep");
   }
 
-  function renderAll() { renderOW(); renderTW(); }
+  // ---- slab schedule, kept in this browser
+  const last = {};
+  const KEY = "rcslab-schedule";
+  let schedule = {};
+  try { schedule = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { schedule = {}; }
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(schedule)); } catch (e) {} };
+  const markOf = (k) => $(k + "-mark").value.trim();
+  const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  function nextMark() { let n = 1; while (schedule["S" + n]) n++; return "S" + n; }
+
+  function addRow(k) {
+    const mark = markOf(k);
+    if (!mark) { $(k + "-add-msg").textContent = "ใส่ชื่อพื้นก่อน เช่น S1"; return; }
+    const existed = !!schedule[mark];
+    schedule[mark] = last[k]();
+    persist();
+    $("ow-mark").value = $("tw-mark").value = nextMark();
+    $(k + "-add-msg").textContent = `${existed ? "แทนที่" : "เพิ่ม"} ${mark} แล้ว · ${Object.keys(schedule).length} รายการในตาราง`;
+    renderSchedule();
+  }
+  $("ow-add").addEventListener("click", () => addRow("ow"));
+  $("tw-add").addEventListener("click", () => addRow("tw"));
+  $("ow-mark").value = $("tw-mark").value = nextMark();
+
+  function scheduleRows() { return Object.keys(schedule).sort(natural).map((k) => schedule[k]); }
+  function scheduleText(sep) {
+    const keys = Object.keys(RC.SCHEDULE_COLUMNS), rows = scheduleRows();
+    const line = (cells) => sep === "|" ? `| ${cells.join(" | ")} |` : cells.join("\t");
+    const out = [line(keys.map((k) => RC.SCHEDULE_COLUMNS[k]))];
+    if (sep === "|") out.push("|" + "---|".repeat(keys.length));
+    for (const r of rows) out.push(line(keys.map((k) => r[k])));
+    return out.join("\n");
+  }
+  function copyText(text, msgId, okMsg) {
+    const msg = $(msgId);
+    const fallback = () => { const ta = $("sc-text"); ta.value = text; ta.hidden = false; ta.focus(); ta.select(); msg.textContent = "เลือกข้อความแล้ว กด Ctrl+C / ⌘C เพื่อคัดลอก"; };
+    try { navigator.clipboard.writeText(text).then(() => { msg.textContent = okMsg; }, fallback); } catch (e) { fallback(); }
+  }
+
+  function renderSchedule() {
+    const g = common(), rows = scheduleRows();
+    $("sc-count").textContent = rows.length ? `(${rows.length})` : "";
+    if (!rows.length) {
+      $("out-sc").innerHTML = `<section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule</small></h2>
+        <p class="empty">ยังไม่มีรายการ ออกแบบพื้นในแท็บพื้นทางเดียวหรือพื้นสองทาง แล้วกด “เพิ่ม/แทนที่ในตาราง” ด้านล่างผลการคำนวณ</p></section>`;
+      return;
+    }
+    const bad = rows.filter((r) => !r.ok).map((r) => r.mark);
+    const cell = (v) => `<td class="bar">${esc(v)}</td>`;
+    const notes = RC.scheduleNotes(g.c.fc, g.grade, g.cover, rows.flatMap((r) => r.bars));
+    $("out-sc").innerHTML = `
+      ${bad.length ? `<div class="verdict ng">พื้น ${bad.map(esc).join(", ")} ผลการออกแบบไม่ผ่าน ตรวจสอบก่อนนำไปใช้ในแบบ</div>` : ""}
+      <section class="block"><h2>ตารางเหล็กพื้น <small>Slab Schedule · ${rows.length} รายการ</small></h2>
+        <div class="tw"><table class="sched">
+          <thead>
+            <tr><th rowspan="2">พื้น</th><th rowspan="2">ประเภท</th><th rowspan="2">หนา (m)</th><th rowspan="2">ขนาด (m)</th><th rowspan="2">SDL / LL<br>(kg/m²)</th>
+              <th colspan="3" class="grp">ทิศทางสั้น</th><th colspan="3" class="grp">ทิศทางยาว</th><th rowspan="2">หมายเหตุ</th><th rowspan="2"></th></tr>
+            <tr><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th><th>ล่าง</th><th>บน ขอบต่อเนื่อง</th><th>บน ขอบไม่ต่อเนื่อง</th></tr>
+          </thead><tbody>
+          ${rows.map((r) => `<tr><td>${esc(r.mark)} ${r.ok ? "" : pill(false)}</td><td>${r.kind}</td><td class="n">${r.t}</td><td class="n">${r.size}</td><td class="n">${r.load}</td>
+            ${cell(r.short_bot)}${cell(r.short_top_cont)}${cell(r.short_top_disc)}${cell(r.long_bot)}${cell(r.long_top_cont)}${cell(r.long_top_disc)}
+            <td class="note">${esc(r.remark)}</td><td><button class="ghost" type="button" data-del="${esc(r.mark)}" aria-label="ลบ ${esc(r.mark)}">ลบ</button></td></tr>`).join("")}
+          </tbody></table></div>
+        <div class="actions">
+          <button class="btn" type="button" id="sc-copy-xl">คัดลอกไปวางใน Excel</button>
+          <button class="btn" type="button" id="sc-copy-md">คัดลอกเป็น Markdown</button>
+          <button class="ghost" type="button" id="sc-clear">ล้างตารางทั้งหมด</button>
+          <span id="sc-msg">ตารางเก็บไว้ในเบราว์เซอร์นี้เท่านั้น</span></div>
+        <textarea class="report" id="sc-text" readonly hidden></textarea>
+      </section>
+      <section class="block"><h2>หมายเหตุสำหรับแบบ</h2><ol class="dnotes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ol></section>`;
+    const notesMd = ["", "## หมายเหตุ", ...notes.map((n) => `- ${n}`)].join("\n");
+    $("sc-copy-xl").addEventListener("click", () => copyText(scheduleText("\t") + "\n\n" + notes.map((n, i) => `${i + 1}. ${n}`).join("\n"), "sc-msg", "คัดลอกแล้ว วางใน Excel ได้เลย (แยกคอลัมน์อัตโนมัติ)"));
+    $("sc-copy-md").addEventListener("click", () => copyText("# ตารางเหล็กพื้น (Slab Schedule)\n\n" + scheduleText("|") + "\n" + notesMd, "sc-msg", "คัดลอก Markdown แล้ว"));
+    $("sc-clear").addEventListener("click", (e) => {
+      const b = e.currentTarget;
+      if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "กดอีกครั้งเพื่อยืนยันการล้าง"; return; }
+      schedule = {}; persist(); $("ow-mark").value = $("tw-mark").value = nextMark(); renderSchedule();
+    });
+    document.querySelectorAll("#out-sc [data-del]").forEach((b) => b.addEventListener("click", () => {
+      delete schedule[b.dataset.del]; persist(); renderSchedule();
+    }));
+  }
+
+  function renderAll() { renderOW(); renderTW(); renderSchedule(); }
   for (const el of document.querySelectorAll("#matbar input, #matbar select")) el.addEventListener("input", renderAll);
   for (const el of document.querySelectorAll("#form-ow input, #form-ow select")) el.addEventListener("input", renderOW);
   for (const el of document.querySelectorAll("#form-tw input, #form-tw select")) el.addEventListener("input", renderTW);

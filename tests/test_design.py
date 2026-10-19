@@ -150,3 +150,33 @@ def test_two_way_boq_items():
 def test_pdf_render():
     pdf = markdown_to_pdf("# หัวข้อ\n\n## ส่วน\n- φMn = 1,000 kg-m ✅ ผ่าน **DB12 @ 0.20 m**\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")
     assert pdf[:4] == b"%PDF" and len(pdf) > 1000
+
+
+# --------------------------------------------------------------------------- schedule
+from rcslab.schedule import NONE, drawing_callout, lap_length, one_way_row, two_way_row  # noqa: E402
+
+
+def test_schedule_rows():
+    tw = design_two_way(TwoWayInput(5, 4, 12, 100, 200, True, False, True, True), CONC, SD40, CODE)
+    row = two_way_row("S1", tw)
+    assert row.size == "4.00 × 5.00" and row.t == "0.12"
+    f = next(f for f in tw.flexure_short if "+M" in f.label)
+    assert row.short_bot == drawing_callout(f.bar, f.spacing)
+    # X > Y: edges 3, 4 (length X) are the long edges, both continuous; edge 2 is a discontinuous short edge
+    assert row.short_top_disc == NONE and row.long_top_cont != NONE and row.long_top_disc != NONE
+    ow = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
+    r1 = one_way_row("S2", ow, 4.0)
+    assert r1.short_top_cont == NONE and r1.long_bot == drawing_callout(ow.temp.bar, ow.temp.spacing)
+    rc = one_way_row("S3", design_one_way(OneWayInput(1.2, 15, CANT, 100, 200), CONC, SD40, CODE), 3.0)
+    assert rc.short_bot == NONE and rc.short_top_cont.startswith("DB12@")
+
+
+def test_drawing_callout():
+    assert drawing_callout("DB12", 20) == "DB12@0.20"
+    assert drawing_callout("RB9", 22.5) == "RB9@0.225"
+    assert drawing_callout("DB10", 40) == "DB10@0.40"
+
+
+def test_lap_length():
+    assert lap_length("DB12") == pytest.approx(0.48)
+    assert lap_length("RB6") == pytest.approx(0.30)

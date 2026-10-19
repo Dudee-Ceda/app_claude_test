@@ -88,3 +88,39 @@ def test_js_engine_matches_python():
         assert got["ok"] == r.ok
         if r.is_two_way:
             assert got["steel"] == pytest.approx(two_way_boq(r, 0.07).steel_total)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_js_schedule_rows_match_python():
+    from rcslab.schedule import COLUMNS, one_way_row, two_way_row
+
+    engine = re.search(r"<script data-engine>(.*?)</script>", HTML.read_text(), re.S).group(1)
+    driver = engine + """
+const P = JSON.parse(process.argv[1]); const out = [];
+const c = RC.concrete(240), s = RC.steel(4000), code = RC.CODES.eit;
+for (const [sup, L, h, p] of P.ow) {
+  const r = RC.designOneWay({ span: L, h, support: sup, sdl: 100, ll: 300, cover: 2, mainBar: "DB12", tempBar: "RB9", pEnd: p, xi: 2 }, c, s, code);
+  out.push(RC.oneWayRow("S", r, 4));
+}
+for (const [x, y, e1, e2, e3, e4] of P.tw) {
+  const r = RC.designTwoWay({ x, y, h: 12, sdl: 100, ll: 300, cover: 2, bar: "DB12", e1, e2, e3, e4 }, c, s, code);
+  out.push(RC.twoWayRow("S", r));
+}
+console.log(JSON.stringify(out));
+"""
+    ow = [("simple", 3.0, 15, 0), ("one_end", 4.0, 14, 0), ("both_ends", 4.0, 12, 0), ("cantilever", 1.5, 15, 200)]
+    tw = [(4, 5, True, True, True, True), (5, 4, True, False, True, True), (3, 4, False, False, False, True)]
+    res = subprocess.run(["node", "-e", driver, json.dumps({"ow": ow, "tw": tw})], capture_output=True, text=True, check=True)
+    js = json.loads(res.stdout)
+    conc, steel, code = Concrete(240), Steel(4000), CODES[CODE_KEYS["eit"]]
+    py = [
+        one_way_row("S", design_one_way(OneWayInput(L, h, SUPPORT_KEYS[sup], 100, 300, 2.0, "DB12", "RB9", p), conc, steel, code), 4)
+        for sup, L, h, p in ow
+    ] + [
+        two_way_row("S", design_two_way(TwoWayInput(x, y, 12, 100, 300, *edges, 2.0, "DB12"), conc, steel, code))
+        for x, y, *edges in tw
+    ]
+    for got, want in zip(js, py):
+        for k in COLUMNS:
+            assert got[k] == getattr(want, k), k
+        assert got["ok"] == want.ok
