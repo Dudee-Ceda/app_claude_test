@@ -86,3 +86,67 @@ def test_two_way_beam_loads_square():
 def test_two_way_flags_one_way_ratio():
     r = design_two_way(TwoWayInput(2, 5, 12, 100, 200), CONC, SD40, CODE)
     assert not r.is_two_way and not r.ok
+
+
+# --------------------------------------------------------------------------- deflection
+from rcslab.boq import STEEL_DENSITY, one_way_boq, two_way_boq  # noqa: E402
+from rcslab.deflection import cracked_inertia, effective_inertia, one_way_deflection  # noqa: E402
+from rcslab.report_pdf import markdown_to_pdf  # noqa: E402
+
+
+def test_uncracked_simple_span_deflection():
+    # tiny load -> Ie = Ig, Δ = 5wL⁴/384EIg
+    df = one_way_deflection("simple", 3.0, 15, 12.4, 2.83, 10, 10, 0, 8, CONC, SD40)
+    Ig = 100 * 15**3 / 12
+    assert df.Ie_DL == pytest.approx(Ig)
+    assert df.delta_DL == pytest.approx(5 * 0.2 * 300**4 / (384 * CONC.Ec * Ig))
+    assert df.limit_L == pytest.approx(300 / 360)
+
+
+def test_cracked_inertia_and_ie_bounds():
+    n = SD40.Es / CONC.Ec
+    Icr = cracked_inertia(2.83, 12.4, n)
+    x = (-n * 2.83 + math.sqrt((n * 2.83) ** 2 + 200 * n * 2.83 * 12.4)) / 100
+    assert 100 * x**2 / 2 == pytest.approx(n * 2.83 * (12.4 - x))
+    Ig = 100 * 15**3 / 12
+    assert Icr < effective_inertia(2e5, 1e5, Ig, Icr) < Ig
+
+
+def test_cantilever_end_load_increases_moment_and_deflection():
+    a = design_one_way(OneWayInput(1.5, 15, CANT, 100, 200), CONC, SD40, CODE)
+    b = design_one_way(OneWayInput(1.5, 15, CANT, 100, 200, p_end=300), CONC, SD40, CODE)
+    assert b.moments["-M ที่ยึดแน่น"] - a.moments["-M ที่ยึดแน่น"] == pytest.approx(1.4 * 300 * 1.5)
+    assert b.shear.Vu - a.shear.Vu == pytest.approx(1.4 * 300)
+    assert b.deflection.delta_D > a.deflection.delta_D
+    assert b.deflection.limit_L == pytest.approx(300 / 360)  # 2L for cantilever
+
+
+def test_thin_slab_passes_when_deflection_ok():
+    res = design_one_way(OneWayInput(3.0, 13, SIMPLE, 50, 150), CONC, SD40, CODE)
+    assert not res.h_ok
+    assert res.ok == res.deflection.ok
+
+
+# --------------------------------------------------------------------------- BOQ
+def test_one_way_boq():
+    res = design_one_way(OneWayInput(3.0, 15, SIMPLE, 100, 200), CONC, SD40, CODE)
+    boq = one_way_boq(res, 4.0, waste=0.0)
+    assert boq.concrete == pytest.approx(3 * 4 * 0.15)
+    main = boq.items[0]
+    assert main.count == math.floor(400 / main.spacing) + 1
+    assert main.length == pytest.approx(3.2)
+    assert main.weight == pytest.approx(main.count * 3.2 * 1.131 * STEEL_DENSITY)
+    assert boq.steel_net == pytest.approx(sum(i.weight for i in boq.items))
+
+
+def test_two_way_boq_items():
+    r = design_two_way(TwoWayInput(4, 5, 12, 100, 200, True, False, True, False), CONC, SD40, CODE)
+    boq = two_way_boq(r, waste=0.1)
+    assert len(boq.items) == 6
+    assert boq.area == 20
+    assert boq.steel_total == pytest.approx(boq.steel_net * 1.1)
+
+
+def test_pdf_render():
+    pdf = markdown_to_pdf("# หัวข้อ\n\n## ส่วน\n- φMn = 1,000 kg-m ✅ ผ่าน **DB12 @ 0.20 m**\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")
+    assert pdf[:4] == b"%PDF" and len(pdf) > 1000
