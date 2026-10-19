@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .flexure import FlexureResult, ShearResult, check_shear, design_flexure
+from .flexure import S_LIMIT, FlexureResult, ShearResult, check_shear, design_flexure
 from .materials import Concrete, DesignCode, Steel, bar_dia
 
 M_RATIOS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
@@ -146,7 +146,7 @@ def design_two_way(inp: TwoWayInput, conc: Concrete, steel: Steel, code: DesignC
     db = bar_dia(inp.bar)
     d_short = inp.h - inp.cover - db / 2
     d_long = d_short - db
-    s_max = min(3 * inp.h, 45.0)
+    s_max = min(3 * inp.h, S_LIMIT)
 
     coefs: dict[str, float] = {}
     moments: dict[str, float] = {}

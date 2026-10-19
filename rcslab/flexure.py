@@ -7,6 +7,7 @@ from .materials import Concrete, DesignCode, Steel, bar_area
 
 B = 100.0  # strip width, cm
 SPACING_STEP = 2.5  # round spacing down to this increment, cm
+S_LIMIT = 30.0  # office detailing limit on any slab bar spacing, cm (code allows up to 45)
 
 
 @dataclass

@@ -234,7 +234,7 @@ ol.dnotes { margin: 0; padding-left: 20px; font-size: 13.5px; display: flex; fle
         <li><code>Rn = Mu / (φ b d²)</code>, <code>ρ = 0.85f'c/fy · [1 − √(1 − 2Rn/0.85f'c)]</code></li>
         <li><code>As,min = ρtemp·b·h</code>: 0.0020 (SR24, SD30), 0.0018 (SD40), 0.0018×4000/fy ≥ 0.0014 (fy &gt; 4000)</li>
         <li><code>ρ ≤ 0.75ρb</code>, <code>ρb = 0.85β₁f'c/fy · 6120/(6120 + fy)</code></li>
-        <li>ระยะห่างเหล็กหลัก ≤ 3h และ ≤ 45 cm, เหล็กกันร้าว ≤ 5h และ ≤ 45 cm, ปัดลงทีละ 2.5 cm</li>
+        <li>ระยะห่างเหล็กหลัก ≤ 3h, เหล็กกันร้าว ≤ 5h และทุกตำแหน่ง ≤ 30 cm (ข้อกำหนดสำนักงาน; ACI ยอมให้ถึง 45 cm) ปัดลงทีละ 2.5 cm</li>
         <li>แรงเฉือน <code>φVc = φ·0.53√f'c·b·d</code></li>
       </ul>
       <h2>พื้นทางเดียว: สัมประสิทธิ์ ACI</h2>
@@ -282,6 +282,7 @@ const RC = (() => {
     aci19: { name: "ACI 318-19 (1.2D + 1.6L)", dl: 1.2, ll: 1.6, phiB: 0.9, phiV: 0.75 },
   };
   const B = 100, STEP = 2.5, ES = 2.04e6;
+  const S_LIMIT = 30; // office detailing limit on any slab bar spacing, cm (code allows up to 45)
 
   const concrete = (fc, uw = 2400) => ({
     fc, uw,
@@ -372,7 +373,7 @@ const RC = (() => {
     const sw = c.uw * inp.h / 100, wd = sw + inp.sdl, wu = code.dl * wd + code.ll * inp.ll;
     const hMin = L * 100 / sup.hDiv * (0.4 + s.fy / 7000), hOk = inp.h >= hMin - 1e-9;
     const d = inp.h - inp.cover - BARS[inp.mainBar][0] / 2;
-    const sMax = Math.min(3 * inp.h, 45), sTemp = Math.min(5 * inp.h, 45);
+    const sMax = Math.min(3 * inp.h, S_LIMIT), sTemp = Math.min(5 * inp.h, S_LIMIT);
     const pu = cant ? code.dl * inp.pEnd : 0;
     const moments = [];
     if (sup.pos) moments.push(["+M กลางช่วง", wu * L * L / sup.pos]);
@@ -429,7 +430,7 @@ const RC = (() => {
     const sw = c.uw * inp.h / 100, wd = sw + inp.sdl, wu = code.dl * wd + code.ll * inp.ll;
     const hMin = Math.max(2 * (S + L) * 100 / 180, 9), hOk = inp.h >= hMin - 1e-9;
     const db = BARS[inp.bar][0], dS = inp.h - inp.cover - db / 2, dL = dS - db;
-    const sMax = Math.min(3 * inp.h, 45);
+    const sMax = Math.min(3 * inp.h, S_LIMIT);
     const rows = [];
     const add = (key, kind, dir) => { const C = coefficient(cs, kind, m, dir); rows.push({ key, kind, dir, C, Mu: C * wu * S * S }); };
     add("S: +M กลางช่วง", "pos", "short");
@@ -540,9 +541,9 @@ const RC = (() => {
       "เหล็กบนยื่นจากขอบคาน 0.30L (L = ช่วงสั้นสำหรับพื้นสองทาง, ช่วงพื้นสำหรับพื้นทางเดียว)",
       "พื้นสองทาง: เหล็กทิศทางสั้นวางชั้นนอก (ล่างสุด/บนสุด) เหล็กทิศทางยาววางชั้นใน",
       `ระยะทาบเหล็ก: ${laps} (RB ต้องงอขอ)`,
-      "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 3t, 0.45 m และต้องไม่น้อยกว่า As,min",
+      "ค่าในตารางเป็นแถบกลาง (Middle strip); แถบเสาของพื้นสองทางใช้ระยะห่าง 1.5 เท่าของแถบกลางได้ แต่ไม่เกิน 0.30 m และต้องไม่น้อยกว่า As,min",
       "พื้นยื่น: เหล็กหลักอยู่บน ยึดฝังเข้าช่วงในยาวไม่น้อยกว่าระยะยื่น",
-      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว",
+      "พื้นแต่ละแผ่นใช้เหล็กขนาดเดียวกันทั้งแผ่น ทั้งเหล็กหลักและเหล็กกันร้าว ระยะห่างเหล็กทุกตำแหน่งไม่เกิน 0.30 m",
       "พื้นทางเดียว: เหล็กกันร้าวบนวางตั้งฉากใต้เหล็กบน ตลอดช่วงที่มีเหล็กบน",
       "ช่อง — หมายถึงพื้นแผ่นนั้นไม่มีขอบประเภทนั้น",
     ];
@@ -734,7 +735,7 @@ if (typeof module !== "undefined") module.exports = RC;
         ${metric("h,min (ACI 9.5a)", fmt(r.hMin) + " cm", pill(r.hOk))}
         ${metric("แรงเฉือน Vu/φVc", r.shear.ratio.toFixed(2), `${fmt(r.shear.Vu, 0)} / ${fmt(r.shear.phiVc, 0)} kg/m ${pill(r.shear.ok)}`)}
       </div>
-      <section class="block"><h2>เหล็กเสริม <small>d = ${r.d.toFixed(2)} cm · s,max = ${Math.min(3 * inp.h, 45)} cm</small></h2>${flexTable([...r.flexure, r.temp])}</section>
+      <section class="block"><h2>เหล็กเสริม <small>d = ${r.d.toFixed(2)} cm · s,max = ${Math.min(3 * inp.h, 30)} cm</small></h2>${flexTable([...r.flexure, r.temp])}</section>
       <section class="block"><h2>แผนภาพโมเมนต์ <small>ประมาณจากสัมประสิทธิ์</small></h2>${momentSvg(r)}</section>
       <section class="block"><h2>การแอ่นตัว <small>Branson Ie · ξ = ${inp.xi}</small></h2>
         <div class="metrics">

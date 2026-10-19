@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .deflection import DeflectionResult, one_way_deflection
-from .flexure import B, FlexureResult, ShearResult, check_shear, design_flexure
+from .flexure import B, S_LIMIT, FlexureResult, ShearResult, check_shear, design_flexure
 from .materials import Concrete, DesignCode, Steel, bar_dia
 
 
@@ -78,8 +78,8 @@ def design_one_way(inp: OneWayInput, conc: Concrete, steel: Steel, code: DesignC
     h_ok = inp.h >= h_min - 1e-9
 
     d = inp.h - inp.cover - bar_dia(inp.main_bar) / 2
-    s_max = min(3 * inp.h, 45.0)
-    s_temp = min(5 * inp.h, 45.0)
+    s_max = min(3 * inp.h, S_LIMIT)
+    s_temp = min(5 * inp.h, S_LIMIT)
 
     cantilever = sup.name == "cantilever"
     p_u = code.dl_factor * inp.p_end if cantilever else 0.0

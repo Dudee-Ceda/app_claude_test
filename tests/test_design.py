@@ -199,3 +199,12 @@ def test_drawing_callout():
 def test_lap_length():
     assert lap_length("DB12") == pytest.approx(0.48)
     assert lap_length("RB6") == pytest.approx(0.30)
+
+
+def test_spacing_never_exceeds_30cm():
+    for sup in ONE_WAY_SUPPORTS:
+        for bar in ("DB12", "DB16", "DB20"):
+            res = design_one_way(OneWayInput(2.0, 20, sup, 50, 100, main_bar=bar), CONC, SD40, CODE)
+            assert max(f.spacing for f in res.flexure + [res.temp]) <= 30
+    tw = design_two_way(TwoWayInput(3, 3.5, 20, 50, 100, bar="DB16"), CONC, SD40, CODE)
+    assert max(f.spacing for f in tw.flexure_short + tw.flexure_long) == 30
